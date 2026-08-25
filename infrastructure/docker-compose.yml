@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  # 1. База даних із підтримкою геометрії та 3D
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: plume_postgis
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: geo_plume_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # 2. Брокер повідомлень для зв'язку NestJS <-> Python
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: plume_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672" # Порт для підключення мікросервісів AMQP
+      - "15672:15672" # UI панель управління (браузер)
+    restart: unless-stopped
+
+volumes:
+  pg_data:

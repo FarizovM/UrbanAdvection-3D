@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis]
+}
+
+// Модель для будівель (Забудова)
+model Building {
+  id     String  @id @default(uuid())
+  osm_id BigInt? @unique // ID з OpenStreetMap
+  name   String?
+  height Float   @default(9.0) // Висота в метрах (якщо немає - дефолт 3 поверхи)
+
+  // 2D підошва будівлі (для відображення на пласкій мапі)
+  footprint Unsupported("geometry(Polygon, 4326)")?
+
+  // 3D геометрія (призма) для математичних розрахунків
+  geom_3d Unsupported("geometry(PolyhedralSurfaceZ, 4326)")?
+
+  @@index([footprint], name: "building_footprint_idx", type: Gist)
+  @@index([geom_3d], name: "building_geom3d_idx", type: Gist)
+  @@map("buildings")
+}
+
+// Модель для джерел нагрівання/забруднення
+model SimulationSource {
+  id            String @id @default(uuid())
+  name          String
+  type          String // "HEAT", "POLLUTION"
+  temperature   Float? // Температура (якщо це теплове джерело)
+  emission_rate Float? // Швидкість викидів (г/с)
+
+  // Точка в 3D просторі (X, Y, Z), де Z - висота над землею (наприклад, труба)
+  location Unsupported("geometry(PointZ, 4326)")?
+
+  @@map("simulation_sources")
+}
