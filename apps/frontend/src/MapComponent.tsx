@@ -1,32 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
-import { GeoJsonLayer } from '@deck.gl/layers';
+import type { MapViewState } from '@deck.gl/core';
+import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { TerrainLayer } from '@deck.gl/geo-layers';
+import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import Map from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-// Початкова точка камери (Центр Києва, нахил 45 градусів для 3D ефекту)
-const INITIAL_VIEW_STATE = {
+const INITIAL_VIEW_STATE: MapViewState = {
     longitude: 30.5234,
     latitude: 50.4501,
     zoom: 15,
-    pitch: 45,
+    pitch: 60, // Зробимо кут ще трохи гострішим для красивого 3D
     bearing: 0
 };
 
 export default function MapComponent() {
     const [buildingsData, setBuildingsData] = useState(null);
+    const [marker, setMarker] = useState<{ lat: number, lng: number } | null>(null);
 
     useEffect(() => {
-        // Задаємо BBox навколо центру Києва для тестового запиту
-        const bbox = 'minLng=30.51&minLat=50.44&maxLng=30.54&maxLat=50.46';
+        const bbox = 'minLng=30.48&minLat=50.42&maxLng=30.56&maxLat=50.48';
 
         fetch(`http://localhost:3000/spatial/buildings?${bbox}`)
             .then(res => res.json())
             .then(data => {
-                // Конвертуємо відповідь Prisma у GeoJSON FeatureCollection
                 const geojson = {
                     type: 'FeatureCollection',
-                    features: data.map(b => ({
+                    features: data.map((b: any) => ({
                         type: 'Feature',
                         geometry: b.footprint_json,
                         properties: {
@@ -41,17 +42,53 @@ export default function MapComponent() {
             .catch(err => console.error("Помилка завантаження будівель:", err));
     }, []);
 
+    const handleMapClick = (info: any) => {
+        if (info.coordinate) {
+            const [lng, lat] = info.coordinate;
+            setMarker({ lat, lng });
+        }
+    };
+
     const layers = [
+        // 1. Шар рельєфу (3D поверхня землі)
+        new TerrainLayer({
+            id: 'terrain-layer',
+            elevationDecoder: {
+                rScaler: 256,
+                gScaler: 1,
+                bScaler: 1 / 256,
+                offset: -32768
+            },
+            elevationData: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+            // ДОДАНО: Натягуємо темні тайли карти прямо на 3D-рельєф
+            texture: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+            operation: 'terrain+draw'
+        }),
+
+        // 2. Шар 3D будівель
         new GeoJsonLayer({
             id: '3d-buildings-layer',
             data: buildingsData,
-            extruded: true,           // Вмикаємо 3D-екструзію
-            wireframe: true,          // Малюємо контури дахів
-            getElevation: f => f.properties.height,
-            getFillColor: [74, 80, 87, 255], // Темно-сірий колір будівель
+            extruded: true,
+            wireframe: true,
+            getElevation: (f: any) => f.properties.height,
+            getFillColor: [74, 80, 87, 255],
             getLineColor: [0, 0, 0, 100],
             pickable: true,
-            autoHighlight: true,      // Підсвічування при наведенні
+            autoHighlight: true,
+            extensions: [new TerrainExtension()],
+        }),
+
+        // 3. Шар маркера (джерело забруднення/тепла)
+        new ScatterplotLayer({
+            id: 'source-marker-layer',
+            data: marker ? [marker] : [],
+            getPosition: d => [d.lng, d.lat, 50],
+            getFillColor: [255, 50, 50, 255],
+            getRadius: 30,
+            radiusUnits: 'meters',
+            pickable: true,
+            extensions: [new TerrainExtension()],
         })
     ];
 
@@ -61,13 +98,27 @@ export default function MapComponent() {
                 initialViewState={INITIAL_VIEW_STATE}
                 controller={true}
                 layers={layers}
-                // Встановлюємо темний фон карти
-                getCursor={({ isDragging }) => isDragging ? 'grabbing' : 'grab'}
+                onClick={handleMapClick}
+                getCursor={({ isDragging }) => isDragging ? 'grabbing' : 'crosshair'}
             >
+                {/* Цей базовий MapLibre тепер працює скоріше як фон/небо, 
+                    бо основну площину міста відмальовує TerrainLayer з текстурою */}
                 <Map
                     mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
                 />
             </DeckGL>
+
+            {marker && (
+                <div style={{
+                    position: 'absolute', top: 20, left: 20, zIndex: 1,
+                    background: 'rgba(0,0,0,0.8)', color: 'white',
+                    padding: '15px', borderRadius: '8px', fontFamily: 'sans-serif'
+                }}>
+                    <h3 style={{ margin: '0 0 10px 0' }}>Джерело (Точка кліку)</h3>
+                    <div>Lat: {marker.lat.toFixed(5)}</div>
+                    <div>Lng: {marker.lng.toFixed(5)}</div>
+                </div>
+            )}
         </div>
     );
 }

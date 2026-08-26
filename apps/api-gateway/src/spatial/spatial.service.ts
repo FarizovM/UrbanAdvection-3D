@@ -3,10 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SpatialService {
-    constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) { }
 
-    async getBuildingsInBBox(minLng: number, minLat: number, maxLng: number, maxLat: number) {
-        const buildings = await this.prisma.$queryRaw`
+  async getBuildingsInBBox(minLng: number, minLat: number, maxLng: number, maxLat: number) {
+    const buildings = await this.prisma.$queryRaw`
       SELECT 
         id, 
         name, 
@@ -17,9 +17,9 @@ export class SpatialService {
         footprint, 
         ST_MakeEnvelope(${minLng}, ${minLat}, ${maxLng}, ${maxLat}, 4326)
       )
-      LIMIT 5000;
+      LIMIT 15000;
     `;
 
-        return buildings;
-    }
+    return buildings;
+  }
 }

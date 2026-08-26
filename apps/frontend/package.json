@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@deck.gl/extensions": "^9.3.10",
+    "@deck.gl/geo-layers": "^9.3.10",
     "@deck.gl/layers": "^9.3.10",
     "@deck.gl/react": "^9.3.10",
     "maplibre-gl": "^6.6.0",
