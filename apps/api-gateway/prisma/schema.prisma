@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
-  extensions = [postgis]
+  extensions = [postgis, postgis_raster, hstore]
 }
 
 // Модель для будівель (Забудова)
