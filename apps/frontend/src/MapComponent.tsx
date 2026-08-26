@@ -11,13 +11,16 @@ const INITIAL_VIEW_STATE: MapViewState = {
     longitude: 30.5234,
     latitude: 50.4501,
     zoom: 15,
-    pitch: 60, // Зробимо кут ще трохи гострішим для красивого 3D
+    pitch: 60,
     bearing: 0
 };
 
 export default function MapComponent() {
     const [buildingsData, setBuildingsData] = useState(null);
     const [marker, setMarker] = useState<{ lat: number, lng: number } | null>(null);
+
+    // Стан для перемикача рельєфу
+    const [showTerrain, setShowTerrain] = useState(true);
 
     useEffect(() => {
         const bbox = 'minLng=30.48&minLat=50.42&maxLng=30.56&maxLat=50.48';
@@ -49,9 +52,10 @@ export default function MapComponent() {
         }
     };
 
+    // Формуємо масив шарів. Використовуємо .filter(Boolean) щоб відкинути false/null
     const layers = [
-        // 1. Шар рельєфу (3D поверхня землі)
-        new TerrainLayer({
+        // Додаємо шар рельєфу тільки якщо showTerrain === true
+        showTerrain && new TerrainLayer({
             id: 'terrain-layer',
             elevationDecoder: {
                 rScaler: 256,
@@ -60,12 +64,12 @@ export default function MapComponent() {
                 offset: -32768
             },
             elevationData: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
-            // ДОДАНО: Натягуємо темні тайли карти прямо на 3D-рельєф
             texture: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+            // ВИПРАВЛЕННЯ ЗУМУ: Обмежуємо запити до API на зумі 14
+            maxZoom: 14,
             operation: 'terrain+draw'
         }),
 
-        // 2. Шар 3D будівель
         new GeoJsonLayer({
             id: '3d-buildings-layer',
             data: buildingsData,
@@ -79,7 +83,6 @@ export default function MapComponent() {
             extensions: [new TerrainExtension()],
         }),
 
-        // 3. Шар маркера (джерело забруднення/тепла)
         new ScatterplotLayer({
             id: 'source-marker-layer',
             data: marker ? [marker] : [],
@@ -90,7 +93,7 @@ export default function MapComponent() {
             pickable: true,
             extensions: [new TerrainExtension()],
         })
-    ];
+    ].filter(Boolean); // Фільтруємо масив, щоб Deck.gl не сварився на `false`
 
     return (
         <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -101,22 +104,38 @@ export default function MapComponent() {
                 onClick={handleMapClick}
                 getCursor={({ isDragging }) => isDragging ? 'grabbing' : 'crosshair'}
             >
-                {/* Цей базовий MapLibre тепер працює скоріше як фон/небо, 
-                    бо основну площину міста відмальовує TerrainLayer з текстурою */}
-                <Map
-                    mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-                />
+                <Map mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" />
             </DeckGL>
 
+            {/* Панель керування у правому верхньому куті */}
+            <div style={{
+                position: 'absolute', top: 20, right: 20, zIndex: 1,
+                background: 'rgba(30, 30, 30, 0.9)', color: 'white',
+                padding: '15px', borderRadius: '8px', fontFamily: 'sans-serif',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
+            }}>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '10px' }}>
+                    <input
+                        type="checkbox"
+                        checked={showTerrain}
+                        onChange={(e) => setShowTerrain(e.target.checked)}
+                        style={{ width: '18px', height: '18px' }}
+                    />
+                    <b>Увімкнути 3D-рельєф</b>
+                </label>
+            </div>
+
+            {/* Плашка джерела */}
             {marker && (
                 <div style={{
                     position: 'absolute', top: 20, left: 20, zIndex: 1,
-                    background: 'rgba(0,0,0,0.8)', color: 'white',
-                    padding: '15px', borderRadius: '8px', fontFamily: 'sans-serif'
+                    background: 'rgba(30, 30, 30, 0.9)', color: 'white',
+                    padding: '15px', borderRadius: '8px', fontFamily: 'sans-serif',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
                 }}>
-                    <h3 style={{ margin: '0 0 10px 0' }}>Джерело (Точка кліку)</h3>
-                    <div>Lat: {marker.lat.toFixed(5)}</div>
-                    <div>Lng: {marker.lng.toFixed(5)}</div>
+                    <h3 style={{ margin: '0 0 10px 0', color: '#ff5252' }}>Точка розрахунку</h3>
+                    <div style={{ marginBottom: '5px' }}><b>Lat:</b> {marker.lat.toFixed(5)}</div>
+                    <div><b>Lng:</b> {marker.lng.toFixed(5)}</div>
                 </div>
             )}
         </div>
