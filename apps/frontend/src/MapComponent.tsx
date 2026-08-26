@@ -61,7 +61,7 @@ export default function MapComponent() {
             },
             elevationData: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
             // ДОДАНО: Натягуємо темні тайли карти прямо на 3D-рельєф
-            texture: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+            texture: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
             operation: 'terrain+draw'
         }),
 
