@@ -10,7 +10,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 const INITIAL_VIEW_STATE: MapViewState = {
     longitude: 30.5234,
     latitude: 50.4501,
-    zoom: 15,
+    zoom: 14,
     pitch: 60,
     bearing: 0
 };
@@ -66,7 +66,7 @@ export default function MapComponent() {
             elevationData: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
             texture: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
             // ВИПРАВЛЕННЯ ЗУМУ: Обмежуємо запити до API на зумі 14
-            maxZoom: 14,
+            maxZoom: 15,
             operation: 'terrain+draw'
         }),
 
