@@ -44,3 +44,16 @@ model SimulationSource {
 
   @@map("simulation_sources")
 }
+
+// Модель для постів екологічного моніторингу
+model MonitoringPost {
+  id   String @id @default(uuid())
+  name String
+
+  // Просторова колонка для координат (точка)
+  location Unsupported("geometry(Point, 4326)")?
+
+  // Просторово-оптимізований індекс
+  @@index([location], name: "monitoring_posts_location_idx", type: Gist)
+  @@map("monitoring_posts")
+}
