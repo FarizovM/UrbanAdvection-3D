@@ -2,7 +2,11 @@ import uvicorn
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from typing import Optional
+
+from database import get_db
+from controllers.getNearestPost import get_nearest_posts
 
 app = FastAPI(title="UrbanAdvection-3D Simulation Engine")
 
@@ -43,12 +47,10 @@ def api_get_plume(params: SimulationParams):
     return {"status": "success", "message": "Pollution plume calculated"}
 
 @app.get("/api/nearest-post")
-def api_get_nearest_post(lat: float, lng: float, radius_km: float = 3.0):
-    """
-    Пошук постів моніторингу в радіусі 3 км та отримання їхніх даних.
-    """
-    # TODO: Запит через ST_DWithin до PostGIS
-    return {"status": "success", "data": []}
+def api_get_nearest_post(lat: float, lng: float, radius_km: float = 3.0, db: Session = Depends(get_db)):
+    radius_m = radius_km * 1000
+    posts = get_nearest_posts(lat, lng, radius_m, db)
+    return {"status": "success", "data": posts}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
