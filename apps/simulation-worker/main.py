@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional
 
 from database import get_db
@@ -45,6 +46,23 @@ def api_get_plume(params: SimulationParams):
     """
     # TODO: Логіка дисперсії забруднювачів
     return {"status": "success", "message": "Pollution plume calculated"}
+
+@app.get("/api/posts")
+def api_get_all_posts(db: Session = Depends(get_db)):
+    """
+    Отримання всіх доступних постів моніторингу з бази даних.
+    """
+    query = text("""
+        SELECT 
+            id, 
+            name, 
+            ST_X(location::geometry) as lng, 
+            ST_Y(location::geometry) as lat
+        FROM monitoring_posts;
+    """)
+    
+    result = db.execute(query).mappings().all()
+    return {"status": "success", "data": [dict(row) for row in result]}
 
 @app.get("/api/nearest-post")
 def api_get_nearest_post(lat: float, lng: float, radius_km: float = 3.0, db: Session = Depends(get_db)):

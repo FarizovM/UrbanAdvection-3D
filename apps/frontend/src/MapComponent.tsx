@@ -22,6 +22,9 @@ export default function MapComponent() {
     // Стан для кліку по карті (червоний маркер)
     const [marker, setMarker] = useState<{ lat: number, lng: number } | null>(null);
 
+    // Стан для ВСІХ постів моніторингу
+    const [posts, setPosts] = useState<any[]>([]);
+
     // Стан для масиву знайдених постів (зелені маркери)
     const [nearestPosts, setNearestPosts] = useState<any[]>([]);
 
@@ -45,32 +48,32 @@ export default function MapComponent() {
                 setBuildingsData(geojson);
             })
             .catch(err => console.error("Помилка завантаження будівель:", err));
+
+        // Завантаження постів моніторингу
+        fetch('http://localhost:8000/api/posts')
+            .then(res => res.json())
+            .then(result => {
+                if (result.status === 'success') {
+                    setPosts(result.data);
+                }
+            })
+            .catch(err => console.error("Помилка завантаження постів:", err));
+
     }, []);
 
-    // 2. Обробка кліків по карті та об'єктах
-    const handleMapClick = async (info: any) => {
+    // Обробка кліків по карті та об'єктах
+    const handleMapClick = (info: any) => {
         // Якщо клікнули на пост моніторингу
         if (info.object && info.layer.id === 'monitoring-posts-layer') {
             setSelectedPost(info.object);
-            return; // Зупиняємо виконання, щоб не збивати маркер
+            return;
         }
 
-        // Якщо клікнули просто по порожній карті або рельєфу
+        // Якщо клікнули просто по карті - ставимо джерело
         if (info.coordinate) {
             const [lng, lat] = info.coordinate;
             setMarker({ lat, lng });
-            setSelectedPost(null); // Ховаємо картку поста
-
-            // Робимо запит до Python FastAPI
-            try {
-                const response = await fetch(`http://localhost:8000/api/nearest-post?lat=${lat}&lng=${lng}&radius_km=3`);
-                const result = await response.json();
-                if (result.status === 'success') {
-                    setNearestPosts(result.data);
-                }
-            } catch (err) {
-                console.error("Помилка зв'язку з Python-воркером:", err);
-            }
+            setSelectedPost(null); // Ховаємо картку, якщо клікнули повз
         }
     };
 
@@ -112,13 +115,13 @@ export default function MapComponent() {
         // Зелені маркери - знайдені пости моніторингу
         new ScatterplotLayer({
             id: 'monitoring-posts-layer',
-            data: nearestPosts,
-            getPosition: d => [d.lng, d.lat, 30], // Підняті вище, щоб їх було краще видно
-            getFillColor: [50, 200, 100, 255], // Приємний зелений
+            data: posts,
+            getPosition: d => [d.lng, d.lat, 30],
+            getFillColor: [50, 200, 100, 255],
             getRadius: 40,
             radiusUnits: 'meters',
-            pickable: true, // Вмикаємо клікабельність
-            autoHighlight: true, // Підсвічування при наведенні
+            pickable: true,
+            autoHighlight: true,
             extensions: [new TerrainExtension()],
         })
     ].filter(Boolean);
