@@ -72,15 +72,17 @@ def _random_measurement(minimum: float, maximum: float) -> float:
     return round(random.uniform(minimum, maximum), 2)
 
 
-def generate_monitoring_observations(db: Session) -> int:
+def generate_monitoring_observations(db: Session, post_ids: Optional[list[str]] = None) -> int:
     """Generate one realistic-looking reading for every configured post."""
-    post_ids = db.execute(text("SELECT id FROM monitoring_posts ORDER BY id")).scalars().all()
-    if not post_ids:
+    ids = post_ids if post_ids is not None else db.execute(
+        text("SELECT id FROM monitoring_posts ORDER BY id")
+    ).scalars().all()
+    if not ids:
         return 0
 
     observed_at = datetime.now(timezone.utc)
     rows = []
-    for post_id in post_ids:
+    for post_id in ids:
         air_temp = _random_measurement(15, 40)
         rows.append(
             {
@@ -135,11 +137,22 @@ async def _post_generator_loop() -> None:
 async def start_post_generator() -> None:
     db = SessionLocal()
     try:
-        observation_count = db.execute(
-            text("SELECT COUNT(*) FROM monitoring_observations")
-        ).scalar_one()
-        if observation_count == 0:
-            generate_monitoring_observations(db)
+        missing_post_ids = db.execute(
+            text(
+                """
+                SELECT p.id
+                FROM monitoring_posts p
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM monitoring_observations o
+                    WHERE o.post_id = p.id
+                )
+                ORDER BY p.id
+                """
+            )
+        ).scalars().all()
+        if missing_post_ids:
+            generate_monitoring_observations(db, missing_post_ids)
     except Exception:
         db.rollback()
     finally:
