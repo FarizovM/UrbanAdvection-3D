@@ -36,8 +36,11 @@ model SimulationSource {
   id            String @id @default(uuid())
   name          String
   type          String // "HEAT", "POLLUTION"
+  pollutant     String?
   temperature   Float? // Температура (якщо це теплове джерело)
   emission_rate Float? // Швидкість викидів (г/с)
+  release_duration_s Float?
+  source_height_m    Float?
 
   // Точка в 3D просторі (X, Y, Z), де Z - висота над землею (наприклад, труба)
   location Unsupported("geometry(PointZ, 4326)")?
@@ -56,4 +59,42 @@ model MonitoringPost {
   // Просторово-оптимізований індекс
   @@index([location], name: "monitoring_posts_location_idx", type: Gist)
   @@map("monitoring_posts")
+
+  observations MonitoringObservation[]
+}
+
+model MonitoringObservation {
+  id                String   @id @default(uuid())
+  post_id           String
+  observed_at       DateTime @db.Timestamptz(6)
+  wind_from_deg     Float?
+  wind_speed_ms     Float?
+  air_temp_c        Float?
+  background_temp_c Float?
+  pm25_ug_m3        Float?
+  no2_ug_m3         Float?
+  pm10_ug_m3        Float?
+  co2_ppm           Float?
+  humidity_pct      Float?
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  post MonitoringPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id, observed_at(sort: Desc)], name: "monitoring_observations_post_time_idx")
+  @@map("monitoring_observations")
+}
+
+model SimulationRun {
+  id             String   @id
+  status         String
+  mode           String
+  request        Json     @map("request_payload")
+  result         Json?    @map("result_payload")
+  error_message  String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  started_at     DateTime? @db.Timestamptz(6)
+  completed_at   DateTime? @db.Timestamptz(6)
+
+  @@index([status, created_at(sort: Desc)], name: "simulation_runs_status_idx")
+  @@map("simulation_runs")
 }
