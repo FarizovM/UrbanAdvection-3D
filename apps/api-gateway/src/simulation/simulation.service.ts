@@ -40,4 +40,36 @@ export class SimulationService {
       throw new BadGatewayException('Simulation worker is unavailable');
     }
   }
+
+  async calculateReverseTrajectory(payload: Record<string, unknown>) {
+    const workerUrl = this.configService.get<string>(
+      'SIMULATION_WORKER_URL',
+      'http://localhost:8000',
+    );
+
+    try {
+      const response = await fetch(`${workerUrl}/api/reverse-trajectory`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const responseText = await response.text();
+      let responseBody: unknown = responseText;
+      try {
+        responseBody = JSON.parse(responseText);
+      } catch {
+        // Preserve a non-JSON worker error as plain text below.
+      }
+
+      if (!response.ok) {
+        throw new HttpException(JSON.stringify(responseBody), response.status);
+      }
+      return responseBody;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new BadGatewayException('Simulation worker is unavailable');
+    }
+  }
 }

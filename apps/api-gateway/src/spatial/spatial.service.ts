@@ -53,4 +53,36 @@ export class SpatialService {
 
     return Buffer.from(rows[0]?.tile ?? []);
   }
+
+  async getCanyonsTile(z: number, x: number, y: number): Promise<Buffer> {
+    const rows = await this.prisma.$queryRaw<Array<{ tile: Buffer | Uint8Array | null }>>`
+      WITH tile AS (
+        SELECT
+          ST_TileEnvelope(${z}, ${x}, ${y}) AS geom,
+          ST_TileEnvelope(${z}, ${x}, ${y}, margin => (64.0 / 4096.0)) AS query_geom
+      ), mvtgeom AS (
+        SELECT
+          c.osm_id::text AS id,
+          c.name,
+          c.width_m AS width,
+          c.avg_h AS height,
+          c.h_w_ratio,
+          ST_AsMVTGeom(
+            c.geom_3857,
+            tile.geom,
+            4096,
+            64,
+            true
+          ) AS geom
+        FROM street_canyons c
+        CROSS JOIN tile
+        WHERE c.geom_3857 && ST_Transform(tile.query_geom, 3857)
+          AND ST_Intersects(c.geom_3857, ST_Transform(tile.query_geom, 3857))
+      )
+      SELECT COALESCE(ST_AsMVT(mvtgeom, 'canyons', 4096, 'geom'), ''::bytea) AS tile
+      FROM mvtgeom;
+    `;
+
+    return Buffer.from(rows[0]?.tile ?? []);
+  }
 }

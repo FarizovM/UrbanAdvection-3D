@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from
 import DeckGL from '@deck.gl/react';
 import type { MapViewState, PickingInfo } from '@deck.gl/core';
 import { PathLayer, PointCloudLayer, ScatterplotLayer } from '@deck.gl/layers';
-import { MVTLayer, TerrainLayer } from '@deck.gl/geo-layers';
+import { MVTLayer, TerrainLayer, TripsLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import Map from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -46,6 +46,8 @@ type DispersionResult = {
     wind: { from_deg: number; to_deg: number; speed_ms: number };
     voxels: Voxel[];
     wind_streamlines: Array<{ path: [number, number, number][]; offset_m: number }>;
+    canyon_concentrations?: Record<string, number>;
+    building_risks?: Record<string, number>;
 };
 
 type BuildingProperties = { id: string; name?: string | null; height: number };
@@ -98,6 +100,17 @@ function formatNumber(value: number | null | undefined, digits = 1): string {
     return value == null ? '—' : value.toFixed(digits);
 }
 
+function buildingRiskColor(risk: number, maxRisk: number): [number, number, number, number] {
+    const normalized = Math.max(0, Math.min(1, risk / maxRisk));
+    // Amber to crimson: [255, 190, 0] -> [220, 20, 60]
+    return [
+        Math.round(255 - 35 * normalized),
+        Math.round(190 - 170 * normalized),
+        Math.round(0 + 60 * normalized),
+        255
+    ];
+}
+
 function formatObservedAt(value: string | null | undefined): string {
     return value == null ? 'немає даних' : new Date(value).toLocaleTimeString('uk-UA');
 }
@@ -120,6 +133,22 @@ export default function MapComponent() {
     const [postSourceHeight, setPostSourceHeight] = useState('2');
     const [postWindFromDeg, setPostWindFromDeg] = useState('');
     const [postWindSpeedMs, setPostWindSpeedMs] = useState('');
+
+    const [trajectories, setTrajectories] = useState<Array<{ path: [number, number, number][] }>>([]);
+    const [time, setTime] = useState(0);
+
+    // Animation loop for TripsLayer
+    useEffect(() => {
+        let animation: number;
+        const animate = () => {
+            setTime(t => (t + 1) % 600);
+            animation = requestAnimationFrame(animate);
+        };
+        if (trajectories.length > 0) {
+            animate();
+        }
+        return () => cancelAnimationFrame(animation);
+    }, [trajectories]);
 
     useEffect(() => {
         let isActive = true;
@@ -160,6 +189,7 @@ export default function MapComponent() {
         setContextMenu(null);
         setPointFormOpen(false);
         setDispersion(null);
+        setTrajectories([]);
         setCalculationMode('pollution');
         setPostWindFromDeg(post.wind_from_deg == null ? '' : String(post.wind_from_deg));
         setPostWindSpeedMs(post.wind_speed_ms == null ? '' : String(post.wind_speed_ms));
@@ -178,6 +208,7 @@ export default function MapComponent() {
         setSelectedPost(null);
         setPointFormOpen(false);
         setDispersion(null);
+        setTrajectories([]);
         setContextMenu({
             left: Math.min(Math.max(info.pixel?.[0] ?? 24, 12), Math.max(12, window.innerWidth - 285)),
             top: Math.min(Math.max(info.pixel?.[1] ?? 24, 12), Math.max(12, window.innerHeight - 210)),
@@ -279,6 +310,43 @@ export default function MapComponent() {
         });
     };
 
+    const calculateReverseTrajectory = async () => {
+        if (!selectedPost) return;
+        const wind = validateWind(postWindFromDeg, postWindSpeedMs);
+        if (!wind) {
+            setError('Вкажіть метеодані для зворотного трасування');
+            return;
+        }
+        setIsCalculating(true);
+        setError(null);
+        try {
+            const response = await fetch(`${API_URL}/simulations/reverse-trajectory`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    lng: selectedPost.lng,
+                    lat: selectedPost.lat,
+                    wind_from_deg: wind.direction,
+                    wind_speed_ms: wind.speed,
+                    duration_s: 600,
+                }),
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.status !== 'success') {
+                throw new Error(payload.detail ?? 'Помилка зворотного трасування');
+            }
+            setTrajectories(payload.result.particles);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsCalculating(false);
+        }
+    };
+
+    const maxBuildingRisk = useMemo(() => 
+        dispersion?.building_risks ? Math.max(...Object.values(dispersion.building_risks), 1e-9) : 1
+    , [dispersion?.building_risks]);
+
     const layers = useMemo(() => [
         showTerrain && new TerrainLayer({
             id: 'terrain-layer',
@@ -300,8 +368,37 @@ export default function MapComponent() {
             wireframe: true,
             uniqueIdProperty: 'id',
             getElevation: (feature: { properties?: BuildingProperties }) => feature.properties?.height ?? 9,
-            getFillColor: [74, 80, 87, 210],
+            getFillColor: (feature: { properties?: BuildingProperties }) => {
+                const risk = dispersion?.building_risks?.[feature.properties?.id ?? ''];
+                if (!risk) return [74, 80, 87, 210];
+                return buildingRiskColor(risk, maxBuildingRisk);
+            },
             getLineColor: [0, 0, 0, 100],
+            updateTriggers: {
+                getFillColor: [dispersion?.building_risks, maxBuildingRisk],
+            },
+            pickable: true,
+            autoHighlight: true,
+            extensions: [new TerrainExtension()],
+        }),
+        new MVTLayer({
+            id: 'street-canyons-layer',
+            data: `${API_URL}/spatial/canyons/tiles/{z}/{x}/{y}`,
+            minZoom: 12,
+            maxZoom: 17,
+            extruded: true,
+            wireframe: false,
+            uniqueIdProperty: 'id',
+            getElevation: (feature: any) => feature.properties?.height ?? 10,
+            getFillColor: (feature: any) => {
+                const canyonConc = dispersion?.canyon_concentrations?.[feature.properties?.id];
+                if (!canyonConc) return [0, 0, 0, 0];
+                const normalized = Math.max(0, Math.min(1, canyonConc / (dispersion?.max_value || 1)));
+                return [255, Math.round(255 * (1 - normalized)), 0, Math.round(50 + 200 * normalized)];
+            },
+            updateTriggers: {
+                getFillColor: [dispersion?.canyon_concentrations, dispersion?.max_value],
+            },
             pickable: true,
             autoHighlight: true,
             extensions: [new TerrainExtension()],
@@ -347,7 +444,19 @@ export default function MapComponent() {
             widthMinPixels: 1,
             pickable: false,
         }),
-    ].filter(Boolean), [dispersion, marker, pointSourceHeight, posts, showTerrain]);
+        new TripsLayer({
+            id: 'reverse-trajectory-layer',
+            data: trajectories,
+            getPath: (d: { path: [number, number, number][] }) => d.path.map(p => [p[0], p[1]]),
+            getTimestamps: (d: { path: [number, number, number][] }) => d.path.map(p => p[2]),
+            getColor: [255, 255, 50, 200],
+            opacity: 0.8,
+            widthMinPixels: 3,
+            trailLength: 50,
+            currentTime: time,
+            shadowEnabled: false
+        })
+    ].filter(Boolean), [dispersion, marker, pointSourceHeight, posts, showTerrain, trajectories, time, maxBuildingRisk]);
 
     return (
         <div onContextMenu={preventBrowserContextMenu} style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -431,7 +540,8 @@ export default function MapComponent() {
                         <input value={postWindSpeedMs} onChange={(event) => setPostWindSpeedMs(event.target.value)} type="number" min="0" step="0.1" style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '4px', padding: '8px' }} />
                     </label>
                     <button onClick={() => void calculatePostScenario('pollution')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#50c878', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '8px', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'pollution' ? 'Розрахунок…' : 'Розрахувати розсіювання повітря'}</button>
-                    <button onClick={() => void calculatePostScenario('heat')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#f3a641', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'heat' ? 'Розрахунок…' : 'Розрахувати тепловий слід'}</button>
+                    <button onClick={() => void calculatePostScenario('heat')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#f3a641', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '8px', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'heat' ? 'Розрахунок…' : 'Розрахувати тепловий слід'}</button>
+                    <button onClick={() => void calculateReverseTrajectory()} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#ffeb3b', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && trajectories.length === 0 ? 'Розрахунок…' : 'Знайти джерело (Трасування)'}</button>
                     {dispersion && <div style={{ marginTop: '14px', fontSize: '12px', color: dispersion.mode === 'heat' ? '#ffd56a' : '#bdeccf' }}>{dispersion.mode === 'heat' ? 'Тепловий слід' : 'Розсіювання домішки'} · {dispersion.grid.nx}×{dispersion.grid.ny}×{dispersion.grid.nz} комірок · {dispersion.terrain.building_count} будівель · максимум {dispersion.max_value.toExponential(3)} {dispersion.value_unit}</div>}
                     <button onClick={() => setSelectedPost(null)} style={{ display: 'block', margin: '12px auto 0', background: 'transparent', color: '#aaa', border: 'none', cursor: 'pointer' }}>Закрити картку</button>
                 </div>

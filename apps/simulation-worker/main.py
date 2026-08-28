@@ -15,6 +15,7 @@ from typing import Literal, Optional
 from database import SessionLocal, get_db
 from controllers.getNearestPost import get_nearest_posts
 from services.dispersion import calculate_dispersion
+from services.trajectory import calculate_reverse_trajectory
 
 POST_GENERATOR_INTERVAL_SECONDS = 300
 app = FastAPI(title="UrbanAdvection-3D Simulation Engine")
@@ -193,6 +194,18 @@ def api_get_plume(params: SimulationParams, db: Session = Depends(get_db)):
         return {"status": "success", "result": calculate_dispersion(payload, db)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.post("/api/reverse-trajectory")
+def api_reverse_trajectory(params: SimulationParams, db: Session = Depends(get_db)):
+    """
+    Зворотне трасування для знаходження джерела забруднення.
+    """
+    payload = params.model_dump() if hasattr(params, "model_dump") else params.dict()
+    try:
+        return {"status": "success", "result": calculate_reverse_trajectory(payload, db)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 
 @app.post("/api/dispersion")

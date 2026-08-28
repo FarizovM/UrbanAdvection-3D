@@ -125,6 +125,7 @@ def _load_buildings(
         SELECT
             b.id,
             b.height,
+            ST_Area(ST_Transform(b.footprint, :metric_srid)) AS area,
             ST_AsGeoJSON(ST_Transform(b.footprint, :metric_srid)) AS footprint_json
         FROM buildings b
         CROSS JOIN area
@@ -150,12 +151,66 @@ def _load_buildings(
             if isinstance(geometry, str):
                 geometry = json.loads(geometry)
             height = float(row["height"] or 0.0)
+            area = float(row["area"] or 0.0)
             if not math.isfinite(height):
                 continue
-            buildings.append({"geometry": geometry, "height": max(0.0, min(height, 500.0))})
+            buildings.append({"id": row["id"], "geometry": geometry, "height": max(0.0, min(height, 500.0)), "area": area})
         except (TypeError, ValueError, json.JSONDecodeError):
             continue
     return buildings
+
+
+def _load_canyons(
+    db: Session,
+    lng: float,
+    lat: float,
+    radius_m: float,
+) -> List[Dict[str, Any]]:
+    query = text(
+        """
+        WITH area AS (
+            SELECT ST_Buffer(
+                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                :radius_m
+            )::geometry AS geom
+        )
+        SELECT
+            c.osm_id,
+            c.width_m,
+            c.avg_h,
+            ST_AsGeoJSON(ST_Buffer(ST_Transform(c.geom_4326, :metric_srid), c.width_m / 2.0)) AS geom_json
+        FROM street_canyons c
+        CROSS JOIN area
+        WHERE c.geom_4326 && area.geom
+          AND ST_Intersects(c.geom_4326, area.geom)
+        """
+    )
+    rows = db.execute(
+        query,
+        {
+            "lng": lng,
+            "lat": lat,
+            "radius_m": radius_m,
+            "metric_srid": METRIC_SRID,
+        },
+    ).mappings()
+
+    canyons: List[Dict[str, Any]] = []
+    for row in rows:
+        try:
+            geometry = row["geom_json"]
+            if isinstance(geometry, str):
+                geometry = json.loads(geometry)
+            canyons.append({
+                "geometry": geometry,
+                "osm_id": row["osm_id"],
+                "width_m": float(row["width_m"]),
+                "avg_h": float(row["avg_h"])
+            })
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+    return canyons
+
 
 
 def _load_building_height_grid(
@@ -352,6 +407,117 @@ def _rasterize_buildings(
             local_heights[covered] = np.maximum(local_heights[covered], height)
 
     return height_grid
+
+
+def _rasterize_buildings_with_id(
+    buildings: Iterable[Dict[str, Any]],
+    min_x: float,
+    min_y: float,
+    nx: int,
+    ny: int,
+    resolution_m: float,
+) -> Tuple[np.ndarray, Dict[int, Dict[str, Any]]]:
+    x_values = min_x + (np.arange(nx, dtype=np.float64) + 0.5) * resolution_m
+    y_values = min_y + (np.arange(ny, dtype=np.float64) + 0.5) * resolution_m
+    x_grid, y_grid = np.meshgrid(x_values, y_values)
+    building_grid = np.zeros((ny, nx), dtype=np.int32)
+    building_dict = {}
+    current_idx = 1
+
+    for building in buildings:
+        geometry = building.get("geometry") or {}
+        height = float(building.get("height") or 0.0)
+        area = float(building.get("area") or 0.0)
+        b_id = building.get("id")
+        if not b_id:
+            continue
+            
+        added = False
+        for polygon in _iter_polygons(geometry):
+            if not polygon:
+                continue
+            outer = np.asarray(polygon[0], dtype=np.float64)
+            if outer.ndim != 2 or outer.shape[0] < 3:
+                continue
+            outer = outer[:, :2]
+            low_x, high_x = float(np.min(outer[:, 0])), float(np.max(outer[:, 0]))
+            low_y, high_y = float(np.min(outer[:, 1])), float(np.max(outer[:, 1]))
+            x_start = max(0, int(math.floor((low_x - min_x) / resolution_m)) - 1)
+            x_end = min(nx, int(math.ceil((high_x - min_x) / resolution_m)) + 1)
+            y_start = max(0, int(math.floor((low_y - min_y) / resolution_m)) - 1)
+            y_end = min(ny, int(math.ceil((high_y - min_y) / resolution_m)) + 1)
+            if x_start >= x_end or y_start >= y_end:
+                continue
+
+            local_x = x_grid[y_start:y_end, x_start:x_end]
+            local_y = y_grid[y_start:y_end, x_start:x_end]
+            covered = _point_in_ring(local_x, local_y, outer)
+            for hole in polygon[1:]:
+                covered &= ~_point_in_ring(local_x, local_y, hole)
+            
+            local_grid = building_grid[y_start:y_end, x_start:x_end]
+            local_grid[covered] = current_idx
+            added = True
+            
+        if added:
+            building_dict[current_idx] = {"id": b_id, "height": height, "area": area}
+            current_idx += 1
+
+    return building_grid, building_dict
+
+
+def _rasterize_canyons(
+    canyons: Iterable[Dict[str, Any]],
+    min_x: float,
+    min_y: float,
+    nx: int,
+    ny: int,
+    resolution_m: float,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    x_values = min_x + (np.arange(nx, dtype=np.float64) + 0.5) * resolution_m
+    y_values = min_y + (np.arange(ny, dtype=np.float64) + 0.5) * resolution_m
+    x_grid, y_grid = np.meshgrid(x_values, y_values)
+    canyon_grid = np.zeros((ny, nx), dtype=np.int64)
+    canyon_h = np.zeros((ny, nx), dtype=np.float32)
+    canyon_w = np.zeros((ny, nx), dtype=np.float32)
+
+    for canyon in canyons:
+        geometry = canyon.get("geometry") or {}
+        osm_id = canyon.get("osm_id") or 0
+        h = float(canyon.get("avg_h") or 0.0)
+        w = float(canyon.get("width_m") or 0.0)
+        
+        for polygon in _iter_polygons(geometry):
+            if not polygon:
+                continue
+            outer = np.asarray(polygon[0], dtype=np.float64)
+            if outer.ndim != 2 or outer.shape[0] < 3:
+                continue
+            outer = outer[:, :2]
+            low_x, high_x = float(np.min(outer[:, 0])), float(np.max(outer[:, 0]))
+            low_y, high_y = float(np.min(outer[:, 1])), float(np.max(outer[:, 1]))
+            x_start = max(0, int(math.floor((low_x - min_x) / resolution_m)) - 1)
+            x_end = min(nx, int(math.ceil((high_x - min_x) / resolution_m)) + 1)
+            y_start = max(0, int(math.floor((low_y - min_y) / resolution_m)) - 1)
+            y_end = min(ny, int(math.ceil((high_y - min_y) / resolution_m)) + 1)
+            if x_start >= x_end or y_start >= y_end:
+                continue
+
+            local_x = x_grid[y_start:y_end, x_start:x_end]
+            local_y = y_grid[y_start:y_end, x_start:x_end]
+            covered = _point_in_ring(local_x, local_y, outer)
+            for hole in polygon[1:]:
+                covered &= ~_point_in_ring(local_x, local_y, hole)
+            
+            c_g = canyon_grid[y_start:y_end, x_start:x_end]
+            c_h = canyon_h[y_start:y_end, x_start:x_end]
+            c_w = canyon_w[y_start:y_end, x_start:x_end]
+            c_g[covered] = osm_id
+            c_h[covered] = h
+            c_w[covered] = w
+
+    return canyon_grid, canyon_h, canyon_w
+
 
 
 def _local_to_lon_lat(
@@ -600,17 +766,15 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
     min_x = center_x - radius_m
     min_y = center_y - radius_m
     terrain = _load_terrain(db, min_x, min_y, nx, ny, resolution_m)
-    building_heights, building_count = _load_building_height_grid(
-        db,
-        center_lng,
-        center_lat,
-        radius_m,
-        min_x,
-        min_y,
-        nx,
-        ny,
-        resolution_m,
-    )
+    
+    buildings_data = _load_buildings(db, center_lng, center_lat, radius_m)
+    building_heights = _rasterize_buildings(buildings_data, min_x, min_y, nx, ny, resolution_m)
+    building_grid, building_dict = _rasterize_buildings_with_id(buildings_data, min_x, min_y, nx, ny, resolution_m)
+    building_count = len(buildings_data)
+    
+    canyon_polygons = _load_canyons(db, center_lng, center_lat, radius_m)
+    canyon_grid, canyon_h, canyon_w = _rasterize_canyons(canyon_polygons, min_x, min_y, nx, ny, resolution_m)
+
     x_values = min_x + (np.arange(nx, dtype=np.float64) + 0.5) * resolution_m
     y_values = min_y + (np.arange(ny, dtype=np.float64) + 0.5) * resolution_m
     x_grid, y_grid = np.meshgrid(x_values, y_values)
@@ -741,6 +905,52 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
         if source_rate > 0.0 and injection_duration > 0.0:
             scalar[source_k, source_j, source_i] += source_rate * injection_duration / source_volume
 
+    canyon_concentrations = {}
+    if source_rate > 0.0:
+        for y_idx in range(ny):
+            for x_idx in range(nx):
+                osm_id = canyon_grid[y_idx, x_idx]
+                if osm_id > 0:
+                    h = canyon_h[y_idx, x_idx]
+                    w = canyon_w[y_idx, x_idx]
+                    if h <= 0 or w <= 0: continue
+                    k_roof = int(np.clip(math.floor(h / vertical_resolution_m), 0, nz - 1))
+                    u_h = math.sqrt(u_profile[k_roof]**2 + v_profile[k_roof]**2)
+                    u_h = max(u_h, 0.1)
+                    max_c = 0.0
+                    for k_idx in range(k_roof + 1):
+                        z_val = z_levels[k_idx]
+                        c_bg = float(scalar[k_idx, y_idx, x_idx])
+                        c_canyon = c_bg + (source_rate / (u_h * w)) * math.exp(-z_val / h)
+                        scalar[k_idx, y_idx, x_idx] = c_canyon
+                        if c_canyon > max_c:
+                            max_c = c_canyon
+                    if max_c > 0:
+                        current_max = canyon_concentrations.get(str(osm_id), 0.0)
+                        if max_c > current_max:
+                            canyon_concentrations[str(osm_id)] = max_c
+
+    building_risks = {}
+    if source_rate > 0.0:
+        for y_idx in range(ny):
+            for x_idx in range(nx):
+                b_idx = building_grid[y_idx, x_idx]
+                if b_idx > 0 and b_idx in building_dict:
+                    b_info = building_dict[b_idx]
+                    h = b_info["height"]
+                    k_max = int(np.clip(math.floor(h / vertical_resolution_m), 0, nz - 1))
+                    
+                    sum_c = 0.0
+                    for k_idx in range(k_max + 1):
+                        sum_c += float(scalar[k_idx, y_idx, x_idx]) * vertical_resolution_m
+                        
+                    # Integration: sum_c is the integral over z. 
+                    if sum_c > 0:
+                        b_id = b_info["id"]
+                        population = (b_info["area"] * h) / 75.0
+                        risk = sum_c * population
+                        building_risks[b_id] = building_risks.get(b_id, 0.0) + risk
+
     max_value = float(np.max(scalar))
     ground_k = int(np.clip(math.floor(2.0 / vertical_resolution_m), 0, nz - 1))
     ground_field = scalar[ground_k]
@@ -813,6 +1023,8 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
             "ny": ny,
             "values": ground_values.ravel().astype(float).tolist(),
         },
+        "canyon_concentrations": canyon_concentrations,
+        "building_risks": building_risks,
         "voxels": voxels,
         "wind_streamlines": wind_streamlines,
         "max_value": max_value,

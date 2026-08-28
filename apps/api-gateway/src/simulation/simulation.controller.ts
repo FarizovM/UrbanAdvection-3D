@@ -9,4 +9,9 @@ export class SimulationController {
   calculateDispersion(@Body() payload: Record<string, unknown>) {
     return this.simulationService.calculateDispersion(payload);
   }
+
+  @Post('reverse-trajectory')
+  calculateReverseTrajectory(@Body() payload: Record<string, unknown>) {
+    return this.simulationService.calculateReverseTrajectory(payload);
+  }
 }
