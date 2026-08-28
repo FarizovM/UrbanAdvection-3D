@@ -41,3 +41,15 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
 
 CREATE INDEX IF NOT EXISTS simulation_runs_status_idx
     ON simulation_runs (status, created_at DESC);
+
+
+CREATE TABLE buildings AS
+SELECT 
+    osm_id AS id, 
+    name, 
+    way AS geom, 
+    CAST(NULLIF(tags->'building:levels', '') AS INTEGER) * 3 AS height_m -- приблизний розрахунок висоти
+FROM planet_osm_polygon
+WHERE building IS NOT NULL;
+
+CREATE INDEX idx_buildings_geom ON buildings USING GIST (geom);
