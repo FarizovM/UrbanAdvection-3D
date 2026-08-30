@@ -394,14 +394,20 @@ export default function MapComponent() {
             extruded: true,
             wireframe: false,
             uniqueIdProperty: 'id',
-            getElevation: (feature: any) => feature.properties?.height ?? 10,
+            getElevation: (feature: any) => {
+                const canyonConc = dispersion?.canyon_concentrations?.[feature.properties?.id];
+                if (!canyonConc) return 2;
+                const normalized = Math.max(0, Math.min(1, canyonConc / (dispersion?.max_value || 1)));
+                return 10 + normalized * 150; // Формує високий стовп для зон стагнації
+            },
             getFillColor: (feature: any) => {
                 const canyonConc = dispersion?.canyon_concentrations?.[feature.properties?.id];
-                if (!canyonConc) return [0, 0, 0, 0];
+                if (!canyonConc) return [255, 255, 255, 15]; // Ледь помітний білий колір для відображення розмітки вулиць
                 const normalized = Math.max(0, Math.min(1, canyonConc / (dispersion?.max_value || 1)));
                 return [255, Math.round(255 * (1 - normalized)), 0, Math.round(50 + 200 * normalized)];
             },
             updateTriggers: {
+                getElevation: [dispersion?.canyon_concentrations, dispersion?.max_value],
                 getFillColor: [dispersion?.canyon_concentrations, dispersion?.max_value],
             },
             pickable: true,

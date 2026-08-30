@@ -923,7 +923,8 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
                         z_val = z_levels[k_idx]
                         c_bg = float(scalar[k_idx, y_idx, x_idx])
                         
-                        if osm_id == source_canyon_id:
+                        # Застосовуємо штрафний коефіцієнт тільки для глибоких каньйонів (H/W >= 1.5)
+                        if osm_id == source_canyon_id and (h / w) >= 1.5:
                             c_canyon = c_bg + (source_rate / (u_h * w)) * math.exp(-z_val / h)
                             scalar[k_idx, y_idx, x_idx] = c_canyon
                         else:
@@ -953,27 +954,34 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
                 b_idx = building_grid[y_idx, x_idx]
                 if b_idx > 0 and b_idx in building_dict:
                     b_info = building_dict[b_idx]
-                    h = b_info["height"]
-                    k_max = int(np.clip(math.floor(h / vertical_resolution_m), 0, nz - 1))
+                    b_h = building_heights[y_idx, x_idx]
+                    k_roof = int(np.clip(math.floor(b_h / vertical_resolution_m), 0, nz - 1))
                     
                     sum_c = 0.0
-                    for k_idx in range(k_max + 1):
+                    for k_idx in range(k_roof + 1):
                         sum_c += float(exposure[k_idx, y_idx, x_idx]) * vertical_resolution_m
                         
-                    b_id = b_info["id"]
-                    b_exposure_sum[b_id] = b_exposure_sum.get(b_id, 0.0) + sum_c
-                    b_cells_count[b_id] = b_cells_count.get(b_id, 0) + 1
+                    b_id_str = str(b_info["id"])
+                    b_exposure_sum[b_id_str] = b_exposure_sum.get(b_id_str, 0.0) + sum_c
+                    b_cells_count[b_id_str] = b_cells_count.get(b_id_str, 0) + 1
 
         for b_idx, b_info in building_dict.items():
-            b_id = b_info["id"]
-            if b_id in b_exposure_sum and b_cells_count[b_id] > 0:
-                avg_exposure = b_exposure_sum[b_id] / b_cells_count[b_id]
-                if avg_exposure > 0:
+            b_id_str = str(b_info["id"])
+            if b_id_str in b_exposure_sum and b_cells_count[b_id_str] > 0:
+                avg_exposure = b_exposure_sum[b_id_str] / b_cells_count[b_id_str]
+                if avg_exposure > 1e-6:
                     h = b_info["height"]
                     population = (b_info["area"] * h) / 75.0
-                    building_risks[b_id] = float(avg_exposure * population)
+                    building_risks[b_id_str] = float(avg_exposure * population)
 
-    max_value = float(np.max(scalar))
+    # Use 99.5th percentile to prevent a massive canyon spike from hiding the plume
+    nonzero_scalar = scalar[scalar > 1e-9]
+    if len(nonzero_scalar) > 0:
+        max_value = float(np.percentile(nonzero_scalar, 99.5))
+        max_value = min(max_value, float(np.max(nonzero_scalar))) 
+    else:
+        max_value = 1.0
+        
     ground_k = int(np.clip(math.floor(2.0 / vertical_resolution_m), 0, nz - 1))
     ground_field = scalar[ground_k]
     lon_grid, lat_grid = _local_to_lon_lat(center_lng, center_lat, center_x, center_y, x_grid, y_grid)
