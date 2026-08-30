@@ -938,6 +938,16 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
 
     building_risks = {}
     if source_rate > 0.0:
+        left = _horizontal_neighbor(scalar, 2, 1)
+        right = _horizontal_neighbor(scalar, 2, -1)
+        down = _horizontal_neighbor(scalar, 1, 1)
+        up = _horizontal_neighbor(scalar, 1, -1)
+        above = _neumann_neighbor(scalar, 0, -1)
+        exposure = np.maximum.reduce([scalar, left, right, down, up, above])
+
+        b_exposure_sum = {}
+        b_cells_count = {}
+
         for y_idx in range(ny):
             for x_idx in range(nx):
                 b_idx = building_grid[y_idx, x_idx]
@@ -948,14 +958,20 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
                     
                     sum_c = 0.0
                     for k_idx in range(k_max + 1):
-                        sum_c += float(scalar[k_idx, y_idx, x_idx]) * vertical_resolution_m
+                        sum_c += float(exposure[k_idx, y_idx, x_idx]) * vertical_resolution_m
                         
-                    # Integration: sum_c is the integral over z. 
-                    if sum_c > 0:
-                        b_id = b_info["id"]
-                        population = (b_info["area"] * h) / 75.0
-                        risk = sum_c * population
-                        building_risks[b_id] = building_risks.get(b_id, 0.0) + float(risk)
+                    b_id = b_info["id"]
+                    b_exposure_sum[b_id] = b_exposure_sum.get(b_id, 0.0) + sum_c
+                    b_cells_count[b_id] = b_cells_count.get(b_id, 0) + 1
+
+        for b_idx, b_info in building_dict.items():
+            b_id = b_info["id"]
+            if b_id in b_exposure_sum and b_cells_count[b_id] > 0:
+                avg_exposure = b_exposure_sum[b_id] / b_cells_count[b_id]
+                if avg_exposure > 0:
+                    h = b_info["height"]
+                    population = (b_info["area"] * h) / 75.0
+                    building_risks[b_id] = float(avg_exposure * population)
 
     max_value = float(np.max(scalar))
     ground_k = int(np.clip(math.floor(2.0 / vertical_resolution_m), 0, nz - 1))
