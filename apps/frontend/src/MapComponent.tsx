@@ -115,6 +115,9 @@ function formatObservedAt(value: string | null | undefined): string {
     return value == null ? 'немає даних' : new Date(value).toLocaleTimeString('uk-UA');
 }
 
+const TERRAIN_EXTENSION = [new TerrainExtension()];
+const ELEVATION_DECODER = { rScaler: 256, gScaler: 1, bScaler: 1 / 256, offset: -32768 };
+
 export default function MapComponent() {
     const [showTerrain, setShowTerrain] = useState(true);
     const [marker, setMarker] = useState<MapPoint | null>(null);
@@ -181,6 +184,7 @@ export default function MapComponent() {
         setPointFormOpen(false);
         setSelectedPost(null);
         setDispersion(null);
+        setTrajectories([]);
     };
 
     const selectPost = (post: Post) => {
@@ -351,7 +355,7 @@ export default function MapComponent() {
     const layers = useMemo(() => [
         showTerrain && new TerrainLayer({
             id: 'terrain-layer',
-            elevationDecoder: { rScaler: 256, gScaler: 1, bScaler: 1 / 256, offset: -32768 },
+            elevationDecoder: ELEVATION_DECODER,
             elevationData: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
             texture: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
             maxZoom: 14,
@@ -380,7 +384,7 @@ export default function MapComponent() {
             },
             pickable: true,
             autoHighlight: true,
-            extensions: [new TerrainExtension()],
+            extensions: TERRAIN_EXTENSION,
         }),
         new MVTLayer({
             id: 'street-canyons-layer',
@@ -402,7 +406,7 @@ export default function MapComponent() {
             },
             pickable: true,
             autoHighlight: true,
-            extensions: [new TerrainExtension()],
+            extensions: TERRAIN_EXTENSION,
         }),
         new ScatterplotLayer({
             id: 'source-marker-layer',
@@ -412,7 +416,7 @@ export default function MapComponent() {
             getRadius: 25,
             radiusUnits: 'meters',
             pickable: false,
-            extensions: [new TerrainExtension()],
+            extensions: TERRAIN_EXTENSION,
         }),
         new ScatterplotLayer({
             id: 'monitoring-posts-layer',
@@ -423,7 +427,17 @@ export default function MapComponent() {
             radiusUnits: 'meters',
             pickable: true,
             autoHighlight: true,
-            extensions: [new TerrainExtension()],
+            extensions: TERRAIN_EXTENSION,
+        }),
+        selectedPost && new ScatterplotLayer({
+            id: 'selected-post-pulse-layer',
+            data: [selectedPost],
+            getPosition: (post: Post) => [post.lng, post.lat, 30],
+            getFillColor: [50, 255, 100, 70],
+            getRadius: 100,
+            radiusUnits: 'meters',
+            pickable: false,
+            extensions: TERRAIN_EXTENSION,
         }),
         new PointCloudLayer({
             id: 'dispersion-voxels-layer',
@@ -448,16 +462,17 @@ export default function MapComponent() {
         new TripsLayer({
             id: 'reverse-trajectory-layer',
             data: trajectories,
-            getPath: (d: { path: [number, number, number][] }) => d.path.map(p => [p[0], p[1]]),
+            getPath: (d: { path: [number, number, number][] }) => d.path.map(p => [p[0], p[1], 20]),
             getTimestamps: (d: { path: [number, number, number][] }) => d.path.map(p => p[2]),
             getColor: [255, 255, 50, 200],
             opacity: 0.8,
             widthMinPixels: 3,
             trailLength: 50,
             currentTime: time,
-            shadowEnabled: false
+            shadowEnabled: false,
+            extensions: TERRAIN_EXTENSION
         })
-    ].filter(Boolean), [dispersion, marker, pointSourceHeight, posts, showTerrain, trajectories, time, maxBuildingRisk]);
+    ].filter(Boolean), [dispersion, marker, pointSourceHeight, posts, selectedPost, showTerrain, trajectories, time, maxBuildingRisk]);
 
     return (
         <div onContextMenu={preventBrowserContextMenu} style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -482,7 +497,7 @@ export default function MapComponent() {
             </div>
 
             {error && (
-                <div style={{ position: 'absolute', bottom: 20, left: 20, zIndex: 4, background: '#8b1e1e', color: 'white', padding: '12px 16px', borderRadius: '8px', maxWidth: '360px' }}>
+                <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 4, background: '#8b1e1e', color: 'white', padding: '12px 16px', borderRadius: '8px', maxWidth: '360px' }}>
                     {error}
                     <button onClick={() => setError(null)} style={{ marginLeft: '10px' }}>×</button>
                 </div>
@@ -520,7 +535,7 @@ export default function MapComponent() {
             )}
 
             {selectedPost && (
-                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 3, background: 'rgba(20, 25, 30, 0.97)', color: 'white', border: '1px solid #50c878', padding: '22px', borderRadius: '12px', fontFamily: 'sans-serif', width: '360px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                <div style={{ position: 'absolute', bottom: 20, left: 20, zIndex: 3, background: 'rgba(20, 25, 30, 0.97)', color: 'white', border: '1px solid #50c878', padding: '22px', borderRadius: '12px', fontFamily: 'sans-serif', width: '360px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                     <h2 style={{ margin: '0 0 4px', color: '#50c878' }}>Пост повітря</h2>
                     <h3 style={{ margin: '0 0 14px', fontWeight: 'normal' }}>{selectedPost.name}</h3>
                     <div style={{ background: 'rgba(80, 200, 120, 0.1)', padding: '10px', borderRadius: '6px', fontSize: '13px', lineHeight: 1.55, marginBottom: '14px' }}>
@@ -547,7 +562,7 @@ export default function MapComponent() {
                     <button onClick={() => void calculateReverseTrajectory()} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#ffeb3b', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && trajectories.length === 0 && calculationMode === 'trajectory' ? 'Розрахунок…' : 'Знайти джерело (Трасування)'}
                     </button>
                     {dispersion && <div style={{ marginTop: '14px', fontSize: '12px', color: dispersion.mode === 'heat' ? '#ffd56a' : '#bdeccf' }}>{dispersion.mode === 'heat' ? 'Тепловий слід' : 'Розсіювання домішки'} · {dispersion.grid.nx}×{dispersion.grid.ny}×{dispersion.grid.nz} комірок · {dispersion.terrain.building_count} будівель · максимум {dispersion.max_value.toExponential(3)} {dispersion.value_unit}</div>}
-                    <button onClick={() => setSelectedPost(null)} style={{ display: 'block', margin: '12px auto 0', background: 'transparent', color: '#aaa', border: 'none', cursor: 'pointer' }}>Закрити картку</button>
+                    <button onClick={() => { setSelectedPost(null); setTrajectories([]); setDispersion(null); }} style={{ display: 'block', margin: '12px auto 0', background: 'transparent', color: '#aaa', border: 'none', cursor: 'pointer' }}>Закрити картку</button>
                 </div>
             )}
 
