@@ -39,48 +39,52 @@ docker-compose up -d
 ```
 База даних буде доступна на localhost:5434
 
-### Крок 3: Імпорт просторових даних (OSM та DEM)
-**Важливо:** Оскільки міграції бази даних містять SQL-скрипти, які спираються на сирі дані OpenStreetMap (для генерації таблиць `buildings` та `street_canyons`), геодані необхідно завантажити **перед** запуском міграцій Prisma.
+### Крок 3: Створення базових таблиць (Prisma Init)
+**Важливо:** Спочатку ми ініціалізуємо базові таблиці Prisma на чистій базі даних, щоб уникнути конфліктів зі сторонніми просторовими даними OSM.
 
-1. У теці `infrastructure` знаходиться файл `kyiv.osm.pbf`. Для його імпорту в базу даних скористаємося стандартною утилітою `osm2pgsql` через Docker (це не потребує встановлення утиліти локально).
-Виконайте команди з кореня проєкту:
-
+1. Перейдіть у папку API Gateway:
 ```bash
-cd infrastructure
-
-docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y osm2pgsql && osm2pgsql -d geo_plume_db -U admin -H host.docker.internal -P 5434 --create --slim --hstore --cache 1000 /data/kyiv.osm.pbf"
-```
-Ця команда створить просторові таблиці (`planet_osm_polygon`, `planet_osm_line` тощо) з геометрією будівель та доріг.
-
-2. Імпорт рельєфу (Digital Elevation Model - DEM):
-Файл висот `kyiv_dem.tif` знаходиться у папці `infrastructure`. Виконайте його імпорт за допомогою `raster2pgsql` всередині тимчасового контейнера з БД:
-
-```bash
-docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y postgis postgresql-client && raster2pgsql -I -C -s 4326 /data/kyiv_dem.tif public.kyiv_elevation | psql -U admin -d geo_plume_db -h host.docker.internal -p 5434"
-```
-
-### Крок 4: Налаштування API Gateway (Міграції та Сідінг)
-На цьому кроці ми встановимо залежності NestJS, створимо таблиці в БД та наповнимо їх початковими даними.
-
-1. Поверніться в корінь проєкту та перейдіть у папку API Gateway:
-```bash
-cd ../apps/api-gateway
-
-npm install
+cd apps/api-gateway
+bun install
 ```
 
 2. Створіть файл `.env` та додайте рядок підключення до БД:
 ```bash
-# Приклад підключення до локальної БД з Docker
 DATABASE_URL="postgresql://admin:secretpassword@localhost:5434/geo_plume_db?schema=public"
 ```
 
-3. Проведення міграцій: Ця команда зчитає файл `prisma/schema.prisma`, створить таблиці та запустить SQL-міграції (які перенесуть дані з таблиць OSM у `buildings` та згенерують `street_canyons`).
+3. Проведіть базові міграції (це згенерує порожні таблиці `buildings`, `monitoring_posts` тощо):
 ```bash
-bunx prisma migrate dev
+bunx prisma migrate dev --name init
 ```
 
-4. Наповнення бази даних (Seeding): Ця команда запустить скрипт `prisma/seed.ts`, який сформує в базі початкові дані (згенерує пости моніторингу).
+### Крок 4: Імпорт просторових даних (OSM та DEM)
+**Тепер**, коли базові таблиці існують, ми завантажуємо сирі просторові дані. 
+
+1. Перейдіть у теку `infrastructure` та імпортуйте OSM дані `kyiv.osm.pbf`:
+```bash
+cd ../../infrastructure
+docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y osm2pgsql && osm2pgsql -d geo_plume_db -U admin -H host.docker.internal -P 5434 --create --slim --hstore --cache 1000 /data/kyiv.osm.pbf"
+```
+Ця команда створить просторові таблиці (`planet_osm_polygon`, `planet_osm_line` тощо).
+
+2. Імпорт рельєфу (Digital Elevation Model - DEM):
+```bash
+docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y postgis postgresql-client && raster2pgsql -I -C -s 4326 /data/kyiv_dem.tif public.kyiv_elevation | psql -U admin -d geo_plume_db -h host.docker.internal -p 5434"
+```
+
+### Крок 4.5: Генерація будівель та каньйонів
+Оскільки дані OSM та базові таблиці Prisma вже існують, ми можемо перенести геометрію будівель та згенерувати "вуличні каньйони".
+
+Поверніться до `api-gateway` та виконайте просторові SQL-скрипти:
+```bash
+cd ../apps/api-gateway
+bunx prisma db execute --file prisma/spatial_scripts/01_populate_buildings.sql
+bunx prisma db execute --file prisma/spatial_scripts/02_create_street_canyons.sql
+```
+
+### Крок 5: Наповнення бази даних (Seeding)
+Ця команда запустить скрипт `prisma/seed.ts`, який сформує в базі початкові дані (згенерує пости моніторингу).
 
 ```bash
 bunx prisma db seed
