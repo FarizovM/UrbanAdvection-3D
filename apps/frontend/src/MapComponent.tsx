@@ -7,7 +7,7 @@ import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 import Map from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-type CalculationMode = 'pollution' | 'heat';
+type CalculationMode = 'pollution' | 'heat' | 'trajectory';
 
 type Post = {
     id: string;
@@ -312,6 +312,7 @@ export default function MapComponent() {
 
     const calculateReverseTrajectory = async () => {
         if (!selectedPost) return;
+        setCalculationMode('trajectory');
         const wind = validateWind(postWindFromDeg, postWindSpeedMs);
         if (!wind) {
             setError('Вкажіть метеодані для зворотного трасування');
@@ -343,9 +344,9 @@ export default function MapComponent() {
         }
     };
 
-    const maxBuildingRisk = useMemo(() => 
+    const maxBuildingRisk = useMemo(() =>
         dispersion?.building_risks ? Math.max(...Object.values(dispersion.building_risks), 1e-9) : 1
-    , [dispersion?.building_risks]);
+        , [dispersion?.building_risks]);
 
     const layers = useMemo(() => [
         showTerrain && new TerrainLayer({
@@ -419,11 +420,11 @@ export default function MapComponent() {
             getPosition: (post: Post) => [post.lng, post.lat, 30],
             getFillColor: [50, 200, 100, 255],
             getRadius: 40,
-             radiusUnits: 'meters',
-             pickable: true,
-             autoHighlight: true,
-             extensions: [new TerrainExtension()],
-         }),
+            radiusUnits: 'meters',
+            pickable: true,
+            autoHighlight: true,
+            extensions: [new TerrainExtension()],
+        }),
         new PointCloudLayer({
             id: 'dispersion-voxels-layer',
             data: dispersion?.voxels ?? [],
@@ -432,8 +433,8 @@ export default function MapComponent() {
             getNormal: [0, 0, 1],
             getRadius: Math.max(8, (dispersion?.grid.resolution_m ?? 50) * 0.45),
             radiusUnits: 'meters',
-             pickable: true,
-         }),
+            pickable: true,
+        }),
         new PathLayer<{ path: [number, number, number][] }>({
             id: 'wind-streamlines-layer',
             data: dispersion?.wind_streamlines ?? [],
@@ -539,9 +540,12 @@ export default function MapComponent() {
                     <label style={{ display: 'block', marginBottom: '14px' }}>Швидкість вітру (м/с)
                         <input value={postWindSpeedMs} onChange={(event) => setPostWindSpeedMs(event.target.value)} type="number" min="0" step="0.1" style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '4px', padding: '8px' }} />
                     </label>
-                    <button onClick={() => void calculatePostScenario('pollution')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#50c878', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '8px', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'pollution' ? 'Розрахунок…' : 'Розрахувати розсіювання повітря'}</button>
-                    <button onClick={() => void calculatePostScenario('heat')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#f3a641', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '8px', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'heat' ? 'Розрахунок…' : 'Розрахувати тепловий слід'}</button>
-                    <button onClick={() => void calculateReverseTrajectory()} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#ffeb3b', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && trajectories.length === 0 ? 'Розрахунок…' : 'Знайти джерело (Трасування)'}</button>
+                    <button onClick={() => void calculatePostScenario('pollution')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#50c878', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '8px', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'pollution' ? 'Розрахунок…' : 'Розрахувати розсіювання повітря'}
+                    </button>
+                    <button onClick={() => void calculatePostScenario('heat')} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#f3a641', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', marginBottom: '8px', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && calculationMode === 'heat' ? 'Розрахунок…' : 'Розрахувати тепловий слід'}
+                    </button>
+                    <button onClick={() => void calculateReverseTrajectory()} disabled={isCalculating} style={{ display: 'block', width: '100%', background: '#ffeb3b', color: '#000', border: 'none', padding: '11px', borderRadius: '6px', fontWeight: 'bold', cursor: isCalculating ? 'wait' : 'pointer' }}>{isCalculating && trajectories.length === 0 && calculationMode === 'trajectory' ? 'Розрахунок…' : 'Знайти джерело (Трасування)'}
+                    </button>
                     {dispersion && <div style={{ marginTop: '14px', fontSize: '12px', color: dispersion.mode === 'heat' ? '#ffd56a' : '#bdeccf' }}>{dispersion.mode === 'heat' ? 'Тепловий слід' : 'Розсіювання домішки'} · {dispersion.grid.nx}×{dispersion.grid.ny}×{dispersion.grid.nz} комірок · {dispersion.terrain.building_count} будівель · максимум {dispersion.max_value.toExponential(3)} {dispersion.value_unit}</div>}
                     <button onClick={() => setSelectedPost(null)} style={{ display: 'block', margin: '12px auto 0', background: 'transparent', color: '#aaa', border: 'none', cursor: 'pointer' }}>Закрити картку</button>
                 </div>
