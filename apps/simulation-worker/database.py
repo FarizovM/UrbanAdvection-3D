@@ -3,6 +3,10 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # База доступна через Docker port mapping локально, але може бути змінена
 # через DATABASE_URL у середовищі worker-а.
 DATABASE_URL = os.getenv(

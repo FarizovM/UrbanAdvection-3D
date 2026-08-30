@@ -10,35 +10,31 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
-  extensions = [postgis, postgis_raster, hstore]
+  extensions = [postgis, postgis_raster, hstore, fuzzystrmatch, postgis_tiger_geocoder, postgis_topology]
 }
 
 // Модель для будівель (Забудова)
 model Building {
   id     String  @id @default(uuid())
-  osm_id BigInt? @unique // ID з OpenStreetMap
+  osm_id BigInt? @unique
   name   String?
-  height Float   @default(9.0) // Висота в метрах (якщо немає - дефолт 3 поверхи)
+  height Float   @default(9.0)
 
-  // 2D підошва будівлі (для відображення на пласкій мапі)
+  // 2D підошва будівлі
   footprint Unsupported("geometry(Polygon, 4326)")?
 
-  // 3D геометрія (призма) для математичних розрахунків
-  geom_3d Unsupported("geometry(PolyhedralSurfaceZ, 4326)")?
-
   @@index([footprint], name: "building_footprint_idx", type: Gist)
-  @@index([geom_3d], name: "building_geom3d_idx", type: Gist)
   @@map("buildings")
 }
 
 // Модель для джерел нагрівання/забруднення
 model SimulationSource {
-  id            String @id @default(uuid())
-  name          String
-  type          String // "HEAT", "POLLUTION"
-  pollutant     String?
-  temperature   Float? // Температура (якщо це теплове джерело)
-  emission_rate Float? // Швидкість викидів (г/с)
+  id                 String  @id @default(uuid())
+  name               String
+  type               String // "HEAT", "POLLUTION"
+  pollutant          String?
+  temperature        Float? // Температура (якщо це теплове джерело)
+  emission_rate      Float? // Швидкість викидів (г/с)
   release_duration_s Float?
   source_height_m    Float?
 
@@ -56,11 +52,11 @@ model MonitoringPost {
   // Просторова колонка для координат (точка)
   location Unsupported("geometry(Point, 4326)")?
 
+  observations MonitoringObservation[]
+
   // Просторово-оптимізований індекс
   @@index([location], name: "monitoring_posts_location_idx", type: Gist)
   @@map("monitoring_posts")
-
-  observations MonitoringObservation[]
 }
 
 model MonitoringObservation {
@@ -85,15 +81,15 @@ model MonitoringObservation {
 }
 
 model SimulationRun {
-  id             String   @id
-  status         String
-  mode           String
-  request        Json     @map("request_payload")
-  result         Json?    @map("result_payload")
-  error_message  String?
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  started_at     DateTime? @db.Timestamptz(6)
-  completed_at   DateTime? @db.Timestamptz(6)
+  id            String    @id
+  status        String
+  mode          String
+  request       Json      @map("request_payload")
+  result        Json?     @map("result_payload")
+  error_message String?
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  started_at    DateTime? @db.Timestamptz(6)
+  completed_at  DateTime? @db.Timestamptz(6)
 
   @@index([status, created_at(sort: Desc)], name: "simulation_runs_status_idx")
   @@map("simulation_runs")

@@ -27,8 +27,7 @@ street_buffers AS (
         s.name,
         s.width_m,
         s.geom_3857,
-        s.geom_metric,
-        ST_Buffer(s.geom_metric, s.width_m / 2.0 + 10.0) AS search_buffer
+        ST_Transform(ST_Buffer(s.geom_metric, s.width_m / 2.0 + 10.0), 4326) AS search_buffer_4326
     FROM streets s
 ),
 canyon_stats AS (
@@ -40,7 +39,7 @@ canyon_stats AS (
         AVG(b.height) AS avg_h,
         MAX(b.height) AS max_h
     FROM street_buffers sb
-    JOIN buildings b ON ST_Intersects(sb.search_buffer, ST_Transform(b.footprint, 32636))
+    JOIN buildings b ON ST_Intersects(sb.search_buffer_4326, b.footprint)
     GROUP BY sb.osm_id, sb.name, sb.width_m, sb.geom_3857
 )
 SELECT 

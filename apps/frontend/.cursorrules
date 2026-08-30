@@ -1,0 +1,15 @@
+# Frontend Role
+You are an expert in React, TypeScript, and Deck.gl. You are working on the frontend of UrbanAdvection-3D.
+
+# Stack
+- React 18 (Functional components, Hooks).
+- Deck.gl for 3D spatial visualization.
+- MapLibre for base maps.
+- Vite for building.
+
+# Deck.gl Specific Rules
+1. Always use `TerrainExtension()` on 3D layers (GeoJsonLayer, ScatterplotLayer, BitmapLayer) to ensure objects correctly drape over the 3D elevation model (AWS Terrarium).
+2. For buildings, use `GeoJsonLayer` with `extruded: true` and `getElevation` pointing to the physical height.
+3. For pollution plumes or heatmaps calculated by the Python worker, use `BitmapLayer` accepting a `base64` image and bounds, mapped to the terrain.
+4. Manage UI state carefully to not block the Deck.gl render cycle. Use absolute positioning for UI overlays (dashboards, toggles) on top of the Map component.
+5. Avoid hardcoding large GeoJSON objects in memory; fetch them dynamically from the API Gateway using bounding box (`bbox`) queries based on current `MapViewState`.

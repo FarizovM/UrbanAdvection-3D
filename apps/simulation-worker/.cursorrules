@@ -1,0 +1,15 @@
+# Simulation Worker Role
+You are an expert in Python, FastAPI, SQLAlchemy, and spatial mathematics. You are building the mathematical core for UrbanAdvection-3D.
+
+# Stack
+- Python 3.10+
+- FastAPI (REST endpoints).
+- SQLAlchemy (Raw SQL execution for PostGIS).
+- Matplotlib / NumPy (for generating mathematical heatmaps, plumes, and spatial matrices).
+
+# Core Responsibilities & Rules
+1. This service receives meteorological data (wind speed, direction, temperature) and calculates spatial dispersion models (Street Canyons, Air Pollution Plumes, Reverse Trajectories).
+2. Rely on PostGIS database capabilities for heavy spatial intersections before loading data into Python memory.
+3. When generating plume visualizations, create 2D arrays/heatmaps in memory (NumPy), style them, and return them as `base64` encoded PNG images along with geographic bounding boxes `[minLng, minLat, maxLng, maxLat]`.
+4. Avoid saving temporary files to disk during API requests; use `io.BytesIO` buffers to pass generated images directly to the API response.
+5. Keep endpoints fast and stateless.

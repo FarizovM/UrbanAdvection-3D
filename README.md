@@ -25,77 +25,75 @@
 
 ### Крок 1: Клонування репозиторію
 ```bash
-git clone [https://github.com/FarizovM/UrbanAdvection-3D-dev.git](https://github.com/FarizovM/UrbanAdvection-3D-dev.git)
-cd UrbanAdvection-3D-dev
+git clone https://github.com/FarizovM/UrbanAdvection-3D.git
+cd UrbanAdvection-3D
 ```
 
 ### Крок 2: Запуск бази даних (PostgreSQL + PostGIS)
 Для роботи з просторовими даними потрібен PostGIS. У проєкті налаштований Docker Compose для швидкого старту бази даних.
 
 ```bash
-cd infrastructure docker-compose up -d
+cd infrastructure 
+
+docker-compose up -d
 ```
 База даних буде доступна на localhost:5432
 
-### Крок 3: Налаштування API Gateway (Міграції та Сідінг)
-На цьому кроці ми встановимо залежності NestJS, створимо таблиці в БД та наповнимо їх початковими даними (пости моніторингу, будівлі тощо).
+### Крок 3: Імпорт просторових даних (OSM та DEM)
+**Важливо:** Оскільки міграції бази даних містять SQL-скрипти, які спираються на сирі дані OpenStreetMap (для генерації таблиць `buildings` та `street_canyons`), геодані необхідно завантажити **перед** запуском міграцій Prisma.
 
-1. Перейдіть у папку API Gateway:
-```bash
-cd apps/api-gateway
-npm install
-```
-
-2. Створіть файл `.env` на основі прикладу (якщо він є) або додайте рядок підключення до БД:
-```bash
-# Приклад підключення до локальної БД з Docker
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/urban_advection?schema=public"
-```
-
-3. Проведення міграцій: Ця команда зчитає файл prisma/schema.prisma та створить відповідні таблиці у базі даних (включаючи таблиці для симуляцій та метрик).
-```bash
-npx prisma migrate dev --name init
-```
-
-4. Наповнення бази даних (Seeding): Ця команда запустить скрипт prisma/seed.ts, який сформує в базі початкові дані (згенерує пости моніторингу та геометрію).
-
-```bash
-npx prisma db seed
-```
-
-5. У теці `infrastructure` знаходиться файл `kyiv.osm.pbf`. Для його імпорту в базу даних скористаємося стандартною утилітою `osm2pgsql` через Docker (це не потребує встановлення утиліти локально).
-Виконайте команду з кореня проєкту:
+1. У теці `infrastructure` знаходиться файл `kyiv.osm.pbf`. Для його імпорту в базу даних скористаємося стандартною утилітою `osm2pgsql` через Docker (це не потребує встановлення утиліти локально).
+Виконайте команди з кореня проєкту:
 
 ```bash
 cd infrastructure
 
-docker run --rm -v $(pwd):/data \
-  --network=host \
-  osm2pgsql/osm2pgsql \
-  -c -d postgresql://postgres:postgres@localhost:5432/urban_advection \
-  -U postgres -H localhost \
-  --latlong \
-  /data/kyiv.osm.pbf
+docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y osm2pgsql && osm2pgsql -d geo_plume_db -U admin -H host.docker.internal -P 5432 --create --slim --hstore --cache 1000 /data/kyiv.osm.pbf"
 ```
-Ця команда створить просторові таблиці (planet_osm_polygon тощо) з геометрією будівель
+Ця команда створить просторові таблиці (`planet_osm_polygon`, `planet_osm_line` тощо) з геометрією будівель та доріг.
 
-6. Імпорт рельєфу (Digital Elevation Model - DEM):
-
-Завантажте ваш файл висот (наприклад, kyiv_dem.tif) у папку infrastructure та виконайте імпорт за допомогою raster2pgsql всередині контейнера з БД:
+2. Імпорт рельєфу (Digital Elevation Model - DEM):
+Файл висот `kyiv_dem.tif` знаходиться у папці `infrastructure`. Виконайте його імпорт за допомогою `raster2pgsql` всередині тимчасового контейнера з БД:
 
 ```bash
-docker exec -i <назва_контейнера_postgis> \
-  sh -c "raster2pgsql -s 4326 -I -C -M /var/lib/postgresql/data/kyiv_dem.tif public.terrain_elevation | psql -U postgres -d urban_advection"
+docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y postgis postgresql-client && raster2pgsql -I -C -s 4326 /data/kyiv_dem.tif public.kyiv_elevation | psql -U admin -d geo_plume_db -h host.docker.internal -p 5432"
 ```
 
-7. Запустіть NestJS сервер:
+### Крок 4: Налаштування API Gateway (Міграції та Сідінг)
+На цьому кроці ми встановимо залежності NestJS, створимо таблиці в БД та наповнимо їх початковими даними.
+
+1. Поверніться в корінь проєкту та перейдіть у папку API Gateway:
+```bash
+cd ../apps/api-gateway
+
+npm install
+```
+
+2. Створіть файл `.env` та додайте рядок підключення до БД:
+```bash
+# Приклад підключення до локальної БД з Docker
+DATABASE_URL="postgresql://admin:secretpassword@localhost:5432/geo_plume_db?schema=public"
+```
+
+3. Проведення міграцій: Ця команда зчитає файл `prisma/schema.prisma`, створить таблиці та запустить SQL-міграції (які перенесуть дані з таблиць OSM у `buildings` та згенерують `street_canyons`).
+```bash
+bunx prisma migrate dev
+```
+
+4. Наповнення бази даних (Seeding): Ця команда запустить скрипт `prisma/seed.ts`, який сформує в базі початкові дані (згенерує пости моніторингу).
 
 ```bash
-npx run start:dev
+bunx prisma db seed
+```
+
+5. Запустіть NestJS сервер:
+
+```bash
+bun run start:dev
 ```
 API Gateway працюватиме на http://localhost:3000.
 
-### Крок 4: Налаштування та запуск Simulation Worker (Python)
+### Крок 5: Налаштування та запуск Simulation Worker (Python)
 Цей мікросервіс відповідає за обчислення математичних моделей розсіювання (плюмів) і працює паралельно з NestJS.
 
 1. Відкрийте новий термінал та перейдіть у папку Python-воркера:
@@ -120,7 +118,7 @@ pip install -r requirements.txt
 
 4. Налаштуйте файл .env у цій папці (ідентично до бази даних API Gateway):
 ```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/urban_advection
+DATABASE_URL=postgresql://admin:secretpassword@127.0.0.1:5432/geo_plume_db
 ```
 
 5. Запустіть FastAPI сервер:
@@ -129,7 +127,7 @@ uvicorn main:app --reload --port 8000
 ```
 Python-воркер працюватиме на http://localhost:8000
 
-### Крок 5: Налаштування та запуск Frontend (React)
+### Крок 6: Налаштування та запуск Frontend (React)
 Останній крок — запуск користувацького 3D-інтерфейсу.
 
 1. Відкрийте третій термінал та перейдіть у папку фронтенду:
@@ -157,4 +155,4 @@ npm run dev
 
 - apps/frontend/ — Клієнтська частина на React + Deck.gl (MapComponent.tsx).
 
-- infrastructure/ — Налаштування інфраструктури (Docker, PBF дані OSM).
+- infrastructure/ — Налаштування інфраструктури (Docker, PBF дані OSM, DEM-рельєф).

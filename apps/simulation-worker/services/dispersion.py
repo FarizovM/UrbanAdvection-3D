@@ -928,7 +928,7 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
                     if max_c > 0:
                         current_max = canyon_concentrations.get(str(osm_id), 0.0)
                         if max_c > current_max:
-                            canyon_concentrations[str(osm_id)] = max_c
+                            canyon_concentrations[str(osm_id)] = float(max_c)
 
     building_risks = {}
     if source_rate > 0.0:
@@ -949,7 +949,7 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
                         b_id = b_info["id"]
                         population = (b_info["area"] * h) / 75.0
                         risk = sum_c * population
-                        building_risks[b_id] = building_risks.get(b_id, 0.0) + risk
+                        building_risks[b_id] = building_risks.get(b_id, 0.0) + float(risk)
 
     max_value = float(np.max(scalar))
     ground_k = int(np.clip(math.floor(2.0 / vertical_resolution_m), 0, nz - 1))

@@ -1,0 +1,14 @@
+# API Gateway Role
+You are an expert in NestJS, Prisma ORM, and PostGIS. You are working on the main API Gateway for UrbanAdvection-3D.
+
+# Stack
+- NestJS (Controllers, Services, Modules).
+- Prisma ORM (used primarily for types and non-spatial data).
+- PostgreSQL with PostGIS extension.
+
+# Rules for Spatial Queries and Prisma
+1. Prisma lacks native PostGIS geometry support. Define spatial columns as `Unsupported("geometry(Geometry, 4326)")` in `schema.prisma`.
+2. For spatial queries (ST_DWithin, ST_Intersects), always use Prisma's `$queryRaw` or `$executeRaw` with safe parameterized inputs to prevent SQL injection.
+3. Do NOT use Prisma to manage or drop tables created by external GIS tools (OSM data).
+4. For seeding spatial data, use `$executeRaw` with `ST_MakePoint` and `ST_SetSRID`.
+5. This gateway orchestrates requests from the Frontend and routes complex math simulation tasks to the Python Simulation Worker.
