@@ -907,6 +907,7 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
 
     canyon_concentrations = {}
     if source_rate > 0.0:
+        source_canyon_id = canyon_grid[source_j, source_i]
         for y_idx in range(ny):
             for x_idx in range(nx):
                 osm_id = canyon_grid[y_idx, x_idx]
@@ -921,8 +922,13 @@ def calculate_dispersion(params: Dict[str, Any], db: Session) -> Dict[str, Any]:
                     for k_idx in range(k_roof + 1):
                         z_val = z_levels[k_idx]
                         c_bg = float(scalar[k_idx, y_idx, x_idx])
-                        c_canyon = c_bg + (source_rate / (u_h * w)) * math.exp(-z_val / h)
-                        scalar[k_idx, y_idx, x_idx] = c_canyon
+                        
+                        if osm_id == source_canyon_id:
+                            c_canyon = c_bg + (source_rate / (u_h * w)) * math.exp(-z_val / h)
+                            scalar[k_idx, y_idx, x_idx] = c_canyon
+                        else:
+                            c_canyon = c_bg
+                            
                         if c_canyon > max_c:
                             max_c = c_canyon
                     if max_c > 0:
