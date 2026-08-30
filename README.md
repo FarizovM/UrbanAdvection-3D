@@ -37,7 +37,7 @@ cd infrastructure
 
 docker-compose up -d
 ```
-База даних буде доступна на localhost:5432
+База даних буде доступна на localhost:5434
 
 ### Крок 3: Імпорт просторових даних (OSM та DEM)
 **Важливо:** Оскільки міграції бази даних містять SQL-скрипти, які спираються на сирі дані OpenStreetMap (для генерації таблиць `buildings` та `street_canyons`), геодані необхідно завантажити **перед** запуском міграцій Prisma.
@@ -48,7 +48,7 @@ docker-compose up -d
 ```bash
 cd infrastructure
 
-docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y osm2pgsql && osm2pgsql -d geo_plume_db -U admin -H host.docker.internal -P 5432 --create --slim --hstore --cache 1000 /data/kyiv.osm.pbf"
+docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y osm2pgsql && osm2pgsql -d geo_plume_db -U admin -H host.docker.internal -P 5434 --create --slim --hstore --cache 1000 /data/kyiv.osm.pbf"
 ```
 Ця команда створить просторові таблиці (`planet_osm_polygon`, `planet_osm_line` тощо) з геометрією будівель та доріг.
 
@@ -56,7 +56,7 @@ docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -
 Файл висот `kyiv_dem.tif` знаходиться у папці `infrastructure`. Виконайте його імпорт за допомогою `raster2pgsql` всередині тимчасового контейнера з БД:
 
 ```bash
-docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y postgis postgresql-client && raster2pgsql -I -C -s 4326 /data/kyiv_dem.tif public.kyiv_elevation | psql -U admin -d geo_plume_db -h host.docker.internal -p 5432"
+docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y postgis postgresql-client && raster2pgsql -I -C -s 4326 /data/kyiv_dem.tif public.kyiv_elevation | psql -U admin -d geo_plume_db -h host.docker.internal -p 5434"
 ```
 
 ### Крок 4: Налаштування API Gateway (Міграції та Сідінг)
@@ -72,7 +72,7 @@ npm install
 2. Створіть файл `.env` та додайте рядок підключення до БД:
 ```bash
 # Приклад підключення до локальної БД з Docker
-DATABASE_URL="postgresql://admin:secretpassword@localhost:5432/geo_plume_db?schema=public"
+DATABASE_URL="postgresql://admin:secretpassword@localhost:5434/geo_plume_db?schema=public"
 ```
 
 3. Проведення міграцій: Ця команда зчитає файл `prisma/schema.prisma`, створить таблиці та запустить SQL-міграції (які перенесуть дані з таблиць OSM у `buildings` та згенерують `street_canyons`).
@@ -118,7 +118,7 @@ pip install -r requirements.txt
 
 4. Налаштуйте файл .env у цій папці (ідентично до бази даних API Gateway):
 ```bash
-DATABASE_URL=postgresql://admin:secretpassword@127.0.0.1:5432/geo_plume_db
+DATABASE_URL=postgresql://admin:secretpassword@127.0.0.1:5434/geo_plume_db
 ```
 
 5. Запустіть FastAPI сервер:
