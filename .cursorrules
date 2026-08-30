@@ -12,5 +12,5 @@ This is a microservice-based system for 3D modeling and analysis of urban air qu
 # Global Spatial Database Rules (CRITICAL)
 1. ALL geographic coordinates sent to/from the frontend MUST be in EPSG:4326 (WGS84).
 2. Internal distance/buffer calculations in PostGIS MUST use `::geography` or transform to EPSG:32636 (UTM Zone 36N for Kyiv).
-3. DO NOT use Prisma migrations (`prisma migrate dev` or `db push`) to manage raw PostGIS tables created via `osm2pgsql` (e.g., `planet_osm_polygon`, `street_canyons`). Use Prisma ONLY for standard relational tables or mapping views.
+3. DO NOT use Prisma migrations (`prisma migrate dev` or `db push`) to manage raw PostGIS tables created via `osm2pgsql` (e.g., `planet_osm_polygon`). Use Prisma ONLY for standard relational tables or custom spatial materialized views (e.g., `street_canyons`) via Raw SQL migrations.
 4. When writing SQL JOINs with spatial data, NEVER wrap the indexed table column in a spatial function (e.g., `ST_Transform`). Always transform the input parameter to match the indexed column's SRID to prevent Sequential Scans.

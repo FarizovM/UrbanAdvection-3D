@@ -5,11 +5,11 @@ You are an expert in Python, FastAPI, SQLAlchemy, and spatial mathematics. You a
 - Python 3.10+
 - FastAPI (REST endpoints).
 - SQLAlchemy (Raw SQL execution for PostGIS).
-- Matplotlib / NumPy (for generating mathematical heatmaps, plumes, and spatial matrices).
+- NumPy / SciPy (for generating mathematical heatmaps, plumes, and spatial matrices).
 
 # Core Responsibilities & Rules
 1. This service receives meteorological data (wind speed, direction, temperature) and calculates spatial dispersion models (Street Canyons, Air Pollution Plumes, Reverse Trajectories).
 2. Rely on PostGIS database capabilities for heavy spatial intersections before loading data into Python memory.
-3. When generating plume visualizations, create 2D arrays/heatmaps in memory (NumPy), style them, and return them as `base64` encoded PNG images along with geographic bounding boxes `[minLng, minLat, maxLng, maxLat]`.
-4. Avoid saving temporary files to disk during API requests; use `io.BytesIO` buffers to pass generated images directly to the API response.
+3. When generating plume visualizations, create numerical 2D arrays/heatmaps in memory (NumPy), and return them as structured JSON data (lists of lists) along with geographic bounding boxes or grid specifications.
+4. Do not generate heavy image files (e.g. PNGs) on the backend; return raw numeric matrix data so the frontend can map it dynamically on the GPU.
 5. Keep endpoints fast and stateless.
