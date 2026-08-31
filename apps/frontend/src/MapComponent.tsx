@@ -99,17 +99,17 @@ function heatColor(value: number): [number, number, number, number] {
 function formatNumber(value: number | null | undefined, requestedDigits = 1): string {
     if (value == null) return '—';
     if (value === 0) return '0';
-    
+
     let digits = requestedDigits;
     const abs = Math.abs(value);
-    
+
     // Динамічно збільшуємо кількість знаків після коми для дуже малих чисел, 
     // щоб уникнути наукового формату (e-4, e-5) і не показувати просто '0'
     if (abs < 0.0001) digits = 6;
     else if (abs < 0.001) digits = 5;
     else if (abs < 0.01) digits = 4;
     else if (abs < 0.1) digits = 3;
-    
+
     return new Intl.NumberFormat('en-US', {
         useGrouping: false,
         maximumFractionDigits: Math.max(digits, 2)
@@ -588,19 +588,19 @@ export default function MapComponent() {
                 </div>
             )}
 
-            {dispersion && !selectedPost && !pointFormOpen && (
+            {/*{dispersion && !selectedPost && !pointFormOpen && (
                 <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 2, background: 'rgba(20, 25, 30, 0.93)', color: 'white', padding: '12px 15px', borderRadius: '8px', fontFamily: 'sans-serif', fontSize: '12px' }}>
                     {dispersion.mode === 'heat' ? 'Тепловий слід · градієнт фіолетовий → червоний → жовтий' : '3D-розсіювання'} · блакитні лінії — напрямок переносу · {dispersion.grid.nx}×{dispersion.grid.ny}×{dispersion.grid.nz} · {dispersion.terrain.building_count} будівель
                     {dispersion.mode === 'heat' && <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '8px', color: '#bbb' }}><span>низька</span><div style={{ width: '150px', height: '8px', borderRadius: '4px', background: 'linear-gradient(90deg, #2d0f64, #5e1c9a, #c12368, #f46326, #ffd53a, #fff7aa)' }} /><span>висока</span></div>}
                 </div>
-            )}
+            )}*/}
             {/* Scientific Legend */}
             {(dispersion || trajectories.length > 0) && (
                 <div style={{ position: 'absolute', bottom: 30, right: 20, zIndex: 1, background: 'rgba(20, 20, 20, 0.95)', color: 'white', padding: '16px', borderRadius: '12px', fontFamily: 'sans-serif', width: '320px', boxShadow: '0 4px 15px rgba(0,0,0,0.5)', border: '1px solid #444' }}>
                     <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', borderBottom: '1px solid #555', paddingBottom: '8px' }}>
                         Легенда симуляції
                     </h3>
-                    
+
                     {trajectories.length > 0 && calculationMode === 'trajectory' && (
                         <div>
                             <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '6px' }}>Зворотне трасування повітряних мас</div>
@@ -630,7 +630,7 @@ export default function MapComponent() {
                                 <span>{formatNumber(maxBuildingRisk, 1)}</span>
                             </div>
                             <div style={{ height: '12px', background: 'linear-gradient(to right, rgb(74, 80, 87), rgb(255, 190, 0), rgb(220, 20, 60))', borderRadius: '4px', marginBottom: '16px' }}></div>
-                            
+
                             <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '6px' }}>Вуличні каньйони</div>
                             <div style={{ fontSize: '12px', color: '#ccc' }}>Зони стагнації, де H/W ≥ 1.5, відображаються як об'ємні червоні стовпи (висота пропорційна концентрації застою).</div>
                         </div>
@@ -645,7 +645,7 @@ export default function MapComponent() {
                                 <span>+{formatNumber(dispersion.max_value / 2, 1)} °C</span>
                                 <span>+{formatNumber(dispersion.max_value, 1)} °C</span>
                             </div>
-                            <div style={{ height: '12px', background: 'linear-gradient(to right, rgb(255, 255, 200), rgb(255, 127, 100), rgb(255, 0, 20))', borderRadius: '4px', marginBottom: '16px' }}></div>
+                            <div style={{ height: '12px', background: 'linear-gradient(to right, rgb(45, 15, 100), rgb(94, 28, 154), rgb(193, 35, 104), rgb(244, 99, 38), rgb(255, 213, 58), rgb(255, 247, 170))', borderRadius: '4px', marginBottom: '16px' }}></div>
 
                             <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', color: '#ffcc00' }}>Теплове навантаження будівель</div>
                             <div style={{ fontSize: '12px', color: '#ccc', marginBottom: '8px' }}>Вплив теплового сліду на фасади прилеглих будівель.</div>
