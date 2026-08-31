@@ -11,6 +11,8 @@ async function bootstrap() {
       'http://127.0.0.1:5174',
     ],
   });
+
+  app.enableShutdownHooks();
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
