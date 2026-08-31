@@ -22,7 +22,6 @@ const INITIAL_VIEW_STATE: MapViewState = {
 };
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-const WORKER_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8000';
 
 export default function MapComponent() {
     const [showTerrain, setShowTerrain] = useState(true);
@@ -35,12 +34,12 @@ export default function MapComponent() {
     const [isCalculating, setIsCalculating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [calculationMode, setCalculationMode] = useState<CalculationMode>('pollution');
-    
+
     const [pointSourceHeight, setPointSourceHeight] = useState('10');
     const [pointEmissionRate, setPointEmissionRate] = useState('1');
     const [pointWindFromDeg, setPointWindFromDeg] = useState('270');
     const [pointWindSpeedMs, setPointWindSpeedMs] = useState('3');
-    
+
     const [postSourceHeight, setPostSourceHeight] = useState('2');
     const [postWindFromDeg, setPostWindFromDeg] = useState('');
     const [postWindSpeedMs, setPostWindSpeedMs] = useState('');
@@ -65,7 +64,7 @@ export default function MapComponent() {
         let isActive = true;
         const loadPosts = async () => {
             try {
-                const response = await fetch(`${WORKER_URL}/api/posts`);
+                const response = await fetch(`${API_URL}/simulations/posts`);
                 if (!response.ok) throw new Error('Не вдалося завантажити пости');
                 const result = await response.json() as { status: string; data: Post[] };
                 if (!isActive || result.status !== 'success') return;
@@ -258,7 +257,7 @@ export default function MapComponent() {
 
     const maxBuildingRisk = useMemo(() =>
         dispersion?.building_risks ? Math.max(...Object.values(dispersion.building_risks), 1e-9) : 1
-    , [dispersion?.building_risks]);
+        , [dispersion?.building_risks]);
 
     const layers = useMapLayers({
         showTerrain,
@@ -289,16 +288,16 @@ export default function MapComponent() {
             <ErrorNotification error={error} setError={setError} />
 
             {marker && contextMenu && !pointFormOpen && !selectedPost && (
-                <ScenarioPointContextMenu 
-                    marker={marker} 
-                    contextMenu={contextMenu} 
-                    openPointForm={openPointForm} 
-                    clearScenarioPoint={clearScenarioPoint} 
+                <ScenarioPointContextMenu
+                    marker={marker}
+                    contextMenu={contextMenu}
+                    openPointForm={openPointForm}
+                    clearScenarioPoint={clearScenarioPoint}
                 />
             )}
 
             {marker && pointFormOpen && !selectedPost && (
-                <ScenarioPointForm 
+                <ScenarioPointForm
                     marker={marker}
                     calculationMode={calculationMode}
                     isCalculating={isCalculating}
@@ -316,7 +315,7 @@ export default function MapComponent() {
             )}
 
             {selectedPost && (
-                <PostCard 
+                <PostCard
                     selectedPost={selectedPost}
                     dispersion={dispersion}
                     trajectories={trajectories}
@@ -334,11 +333,11 @@ export default function MapComponent() {
                 />
             )}
 
-            <MapLegend 
-                dispersion={dispersion} 
-                trajectories={trajectories} 
-                calculationMode={calculationMode} 
-                maxBuildingRisk={maxBuildingRisk} 
+            <MapLegend
+                dispersion={dispersion}
+                trajectories={trajectories}
+                calculationMode={calculationMode}
+                maxBuildingRisk={maxBuildingRisk}
             />
         </div>
     );

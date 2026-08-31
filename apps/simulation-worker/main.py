@@ -269,7 +269,7 @@ def api_get_dispersion(params: SimulationParams, db: Session = Depends(get_db)):
         )
         db.commit()
         raise HTTPException(status_code=500, detail="Dispersion calculation failed") from exc
-
+'''
 @app.get("/api/posts")
 def api_get_all_posts(db: Session = Depends(get_db)):
     """
@@ -305,7 +305,7 @@ def api_get_all_posts(db: Session = Depends(get_db)):
     
     result = db.execute(query).mappings().all()
     return {"status": "success", "data": [dict(row) for row in result]}
-
+'''
 
 @app.post("/api/posts/{post_id}/observations")
 def api_add_observation(post_id: str, params: ObservationParams, db: Session = Depends(get_db)):

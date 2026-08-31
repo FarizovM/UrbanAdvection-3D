@@ -14,7 +14,7 @@ export type Post = {
     pm10_ug_m3?: number | null;
     co2_ppm?: number | null;
     humidity_pct?: number | null;
-    observed_at?: string | null;
+    observed_at?: Date | null;
 };
 
 export type MapPoint = { lat: number; lng: number };
