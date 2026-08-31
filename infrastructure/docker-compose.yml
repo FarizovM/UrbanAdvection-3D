@@ -16,16 +16,16 @@ services:
     restart: unless-stopped
 
   # 2. Брокер повідомлень для зв'язку NestJS <-> Python
-  # rabbitmq:
-  #  image: rabbitmq:3.12-management
-  #  container_name: plume_rabbitmq
-  #  environment:
-  #    RABBITMQ_DEFAULT_USER: guest
-  #    RABBITMQ_DEFAULT_PASS: guest
-  #  ports:
-  #    - "5672:5672" # Порт для підключення мікросервісів AMQP
-  #    - "15672:15672" # UI панель управління (браузер)
-  #  restart: unless-stopped
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: plume_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672" # Порт для підключення мікросервісів AMQP
+      - "15672:15672" # UI панель управління (браузер)
+    restart: unless-stopped
 
 volumes:
   pg_data:

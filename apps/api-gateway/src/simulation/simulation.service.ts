@@ -45,6 +45,15 @@ export class SimulationService {
     }
   }
 
+  async getDispersionStatus(id: string) {
+    const workerUrl = this.configService.get<string>('SIMULATION_WORKER_URL', 'http://localhost:8000');
+
+    const response = await fetch(`${workerUrl}/api/dispersion/${id}`);
+    if (!response.ok) throw new HttpException('Not found', response.status);
+    return response.json();
+  }
+
+
   async calculateReverseTrajectory(payload: Record<string, unknown>) {
     const workerUrl = this.configService.get<string>(
       'SIMULATION_WORKER_URL',

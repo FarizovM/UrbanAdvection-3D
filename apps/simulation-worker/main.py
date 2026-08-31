@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Literal, Optional
+from celery_worker import run_dispersion_task
 
 from database import SessionLocal, get_db
 from controllers.getNearestPost import get_nearest_posts
@@ -169,6 +170,7 @@ async def stop_post_generator() -> None:
         with suppress(asyncio.CancelledError):
             await task
 
+
 @app.post("/api/temperature-plume")
 def api_get_temp_plume(params: SimulationParams, db: Session = Depends(get_db)):
     """
@@ -183,6 +185,7 @@ def api_get_temp_plume(params: SimulationParams, db: Session = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
 @app.post("/api/plume")
 def api_get_plume(params: SimulationParams, db: Session = Depends(get_db)):
     """
@@ -194,6 +197,7 @@ def api_get_plume(params: SimulationParams, db: Session = Depends(get_db)):
         return {"status": "success", "result": calculate_dispersion(payload, db)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 @app.post("/api/reverse-trajectory")
 def api_reverse_trajectory(params: SimulationParams, db: Session = Depends(get_db)):
@@ -207,8 +211,7 @@ def api_reverse_trajectory(params: SimulationParams, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-
-@app.post("/api/dispersion")
+@app.post("/api/dispersion", status_code=202)
 def api_get_dispersion(params: SimulationParams, db: Session = Depends(get_db)):
     """Run the interactive 3D terrain/building-aware calculation."""
     payload = params.model_dump() if hasattr(params, "model_dump") else params.dict()
@@ -217,7 +220,7 @@ def api_get_dispersion(params: SimulationParams, db: Session = Depends(get_db)):
         text(
             """
             INSERT INTO simulation_runs (id, status, mode, request_payload, started_at)
-            VALUES (:id, 'RUNNING', :mode, CAST(:request_payload AS jsonb), now())
+            VALUES (:id, 'PENDING', :mode, CAST(:request_payload AS jsonb), now())
             """
         ),
         {
@@ -227,48 +230,28 @@ def api_get_dispersion(params: SimulationParams, db: Session = Depends(get_db)):
         },
     )
     db.commit()
-    try:
-        result = calculate_dispersion(payload, db)
-        db.execute(
-            text(
-                """
-                UPDATE simulation_runs
-                SET status = 'COMPLETED', result_payload = CAST(:result_payload AS jsonb),
-                    completed_at = now()
-                WHERE id = :id
-                """
-            ),
-            {"id": run_id, "result_payload": json.dumps(result, default=str)},
-        )
-        db.commit()
-        return {"status": "success", "run_id": run_id, "result": result}
-    except ValueError as exc:
-        db.execute(
-            text(
-                """
-                UPDATE simulation_runs
-                SET status = 'FAILED', error_message = :error_message, completed_at = now()
-                WHERE id = :id
-                """
-            ),
-            {"id": run_id, "error_message": str(exc)},
-        )
-        db.commit()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        db.rollback()
-        db.execute(
-            text(
-                """
-                UPDATE simulation_runs
-                SET status = 'FAILED', error_message = :error_message, completed_at = now()
-                WHERE id = :id
-                """
-            ),
-            {"id": run_id, "error_message": "Dispersion calculation failed"},
-        )
-        db.commit()
-        raise HTTPException(status_code=500, detail="Dispersion calculation failed") from exc
+    # ВІДПРАВЛЯЄМО ЗАДАЧУ В ЧЕРГУ (не чекаючи результату)
+    run_dispersion_task.delay(run_id, payload)
+    
+    return {"status": "pending", "run_id": run_id}
+
+
+@app.get("/api/dispersion/{run_id}")
+def api_get_dispersion_status(run_id: str, db: Session = Depends(get_db)):
+    row = db.execute(
+        text("SELECT status, result_payload, error_message FROM simulation_runs WHERE id = :id"), 
+        {"id": run_id}
+    ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    
+    return {
+        "status": row["status"],
+        "result": row["result_payload"],
+        "error": row["error_message"]
+    }
+
+
 '''
 @app.get("/api/posts")
 def api_get_all_posts(db: Session = Depends(get_db)):
@@ -345,6 +328,7 @@ def api_add_observation(post_id: str, params: ObservationParams, db: Session = D
     ).mappings().one()
     db.commit()
     return {"status": "success", "data": dict(row)}
+
 
 @app.get("/api/nearest-post")
 def api_get_nearest_post(lat: float, lng: float, radius_km: float = 3.0, db: Session = Depends(get_db)):

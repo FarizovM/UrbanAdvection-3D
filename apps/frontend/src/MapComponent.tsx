@@ -155,17 +155,35 @@ export default function MapComponent() {
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(request),
             });
-            const payload = await response.json() as { status: string; result?: DispersionResult; detail?: string };
-            if (!response.ok || payload.status !== 'success' || !payload.result) {
-                throw new Error(payload.detail ?? 'Помилка розрахунку розсіювання');
-            }
-            setDispersion(payload.result);
-            return true;
+
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.detail ?? 'Помилка');
+
+            const runId = payload.run_id;
+            // 2. Запитуємо статус кожні 2 секунди (Polling)
+            return new Promise((resolve) => {
+                const interval = setInterval(async () => {
+                    const statusRes = await fetch(`${API_URL}/simulations/dispersion/${runId}`);
+                    const statusData = await statusRes.json();
+
+                    if (statusData.status === 'COMPLETED') {
+                        setDispersion(statusData.result);
+                        setIsCalculating(false);
+                        clearInterval(interval);
+                        resolve(true);
+                    } else if (statusData.status === 'FAILED') {
+                        setError(statusData.error || 'Помилка симуляції');
+                        setIsCalculating(false);
+                        clearInterval(interval);
+                        resolve(false);
+                    }
+                    // Якщо статус PENDING або RUNNING - нічого не робимо, чекаємо наступної ітерації
+                }, 2000);
+            });
         } catch (reason: unknown) {
             setError(reason instanceof Error ? reason.message : 'Помилка розрахунку');
-            return false;
-        } finally {
             setIsCalculating(false);
+            return false;
         }
     };
 

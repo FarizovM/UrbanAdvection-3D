@@ -97,8 +97,8 @@ bun run start:dev
 ```
 API Gateway працюватиме на http://localhost:3000.
 
-### Крок 5: Налаштування та запуск Simulation Worker (Python)
-Цей мікросервіс відповідає за обчислення математичних моделей розсіювання (плюмів) і працює паралельно з NestJS.
+### Крок 5: Налаштування та запуск Simulation Worker (Python / FastAPI + Celery)
+Цей мікросервіс відповідає за обчислення математичних моделей розсіювання (плюмів) і складається з двох процесів: Web-сервера (FastAPI) та фонового обробника завдань (Celery). Вони обмінюються задачами через RabbitMQ і працюють паралельно з NestJS.
 
 1. Відкрийте новий термінал та перейдіть у папку Python-воркера:
 ```bash
@@ -109,8 +109,8 @@ cd apps/simulation-worker
 ```bash
 python -m venv venv
 
-# Для Windows:
-venv\Scripts\activate
+# Для Windows (використовуйте PowerShell):
+.\venv\Scripts\Activate.ps1
 # Для macOS/Linux:
 source venv/bin/activate
 ```
@@ -120,16 +120,28 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Налаштуйте файл .env у цій папці (ідентично до бази даних API Gateway):
+4. Налаштуйте файл `.env` у цій папці (ідентично до бази даних API Gateway + доступ до RabbitMQ):
 ```bash
 DATABASE_URL=postgresql://admin:secretpassword@127.0.0.1:5434/geo_plume_db
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 ```
 
-5. Запустіть FastAPI сервер:
+5. **Запустіть фоновий воркер Celery** (в цьому ж терміналі з активованим venv):
 ```bash
+# Для Windows:
+celery -A celery_worker.celery_app worker --loglevel=info --pool=solo
+
+# Для macOS/Linux:
+celery -A celery_worker.celery_app worker --loglevel=info
+```
+
+6. **Запустіть FastAPI сервер** (відкрийте ще один новий термінал, перейдіть в `apps/simulation-worker`, активуйте `venv`):
+```bash
+python main.py
+# або
 uvicorn main:app --reload --port 8000
 ```
-Python-воркер працюватиме на http://localhost:8000
+Web-сервер Python працюватиме на http://localhost:8000
 
 ### Крок 6: Налаштування та запуск Frontend (React)
 Останній крок — запуск користувацького 3D-інтерфейсу.
