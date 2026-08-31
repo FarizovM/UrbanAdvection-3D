@@ -1,13 +1,14 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { SimulationService } from './simulation.service';
 import type { PostDto } from './dto/posts.dto';
+import type { DispersionPayloadDto } from './dto/dispersion.dto';
 
 @Controller('simulations')
 export class SimulationController {
   constructor(private readonly simulationService: SimulationService) { }
 
   @Post('dispersion')
-  calculateDispersion(@Body() payload: Record<string, unknown>) {
+  calculateDispersion(@Body() payload: DispersionPayloadDto) {
     return this.simulationService.calculateDispersion(payload);
   }
 
@@ -17,7 +18,7 @@ export class SimulationController {
   }
 
   @Post('reverse-trajectory')
-  calculateReverseTrajectory(@Body() payload: Record<string, unknown>) {
+  calculateReverseTrajectory(@Body() payload: DispersionPayloadDto) {
     return this.simulationService.calculateReverseTrajectory(payload);
   }
 

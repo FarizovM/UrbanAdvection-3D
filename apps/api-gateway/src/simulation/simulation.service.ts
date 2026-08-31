@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PostDto } from './dto/posts.dto';
+import type { DispersionPayloadDto } from './dto/dispersion.dto';
 
 @Injectable()
 export class SimulationService {
@@ -13,7 +14,7 @@ export class SimulationService {
     private readonly prisma: PrismaService,
   ) { }
 
-  async calculateDispersion(payload: Record<string, unknown>) {
+  async calculateDispersion(payload: DispersionPayloadDto) {
     const workerUrl = this.configService.get<string>(
       'SIMULATION_WORKER_URL',
       'http://localhost:8000',
@@ -54,7 +55,7 @@ export class SimulationService {
   }
 
 
-  async calculateReverseTrajectory(payload: Record<string, unknown>) {
+  async calculateReverseTrajectory(payload: DispersionPayloadDto) {
     const workerUrl = this.configService.get<string>(
       'SIMULATION_WORKER_URL',
       'http://localhost:8000',
