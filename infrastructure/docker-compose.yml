@@ -27,5 +27,38 @@ services:
       - "15672:15672" # UI панель управління (браузер)
     restart: unless-stopped
 
+  # 3. Web-сервер (FastAPI через Gunicorn)
+  simulation-api:
+    build:
+      context: ../apps/simulation-worker
+      dockerfile: Dockerfile
+    container_name: plume_simulation_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://admin:secretpassword@db:5432/geo_plume_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - db
+      - rabbitmq
+    # Запуск через Gunicorn (команда береться з Dockerfile автоматично)
+    restart: unless-stopped
+  # 4. Background Worker (Celery)
+  simulation-celery:
+    build:
+      context: ../apps/simulation-worker
+      dockerfile: Dockerfile
+    container_name: plume_simulation_celery
+    environment:
+      - DATABASE_URL=postgresql://admin:secretpassword@db:5432/geo_plume_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - db
+      - rabbitmq
+    # ПЕРЕВИЗНАЧАЄМО команду з Dockerfile на запуск Celery
+    # (Тут --pool=solo не потрібен, бо в Docker крутиться повноцінний Linux)
+    command: celery -A celery_worker.celery_app worker --loglevel=info --concurrency=4
+    restart: unless-stopped
+
 volumes:
   pg_data:

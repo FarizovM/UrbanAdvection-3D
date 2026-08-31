@@ -128,7 +128,7 @@ async def _post_generator_loop() -> None:
         await asyncio.sleep(POST_GENERATOR_INTERVAL_SECONDS)
         db = SessionLocal()
         try:
-            generate_monitoring_observations(db)
+            asyncio.to_thread(generate_monitoring_observations, db)
         except Exception:
             db.rollback()
         finally:
@@ -154,7 +154,7 @@ async def start_post_generator() -> None:
             )
         ).scalars().all()
         if missing_post_ids:
-            generate_monitoring_observations(db, missing_post_ids)
+            asyncio.to_thread(generate_monitoring_observations, db, missing_post_ids)
     except Exception:
         db.rollback()
     finally:
