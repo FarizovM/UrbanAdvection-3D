@@ -26,6 +26,9 @@
 ### Крок 1: Клонування репозиторію
 ```bash
 git clone https://github.com/FarizovM/UrbanAdvection-3D.git
+```
+
+```bash
 cd UrbanAdvection-3D
 ```
 
@@ -34,7 +37,8 @@ cd UrbanAdvection-3D
 
 ```bash
 cd infrastructure 
-
+```
+```bash
 docker-compose up -d
 ```
 База даних буде доступна на localhost:5434
@@ -45,6 +49,9 @@ docker-compose up -d
 1. Перейдіть у папку API Gateway:
 ```bash
 cd apps/api-gateway
+```
+
+```bash
 bun install
 ```
 
@@ -64,6 +71,9 @@ bunx prisma migrate dev --name init
 1. Перейдіть у теку `infrastructure` та імпортуйте OSM дані `kyiv.osm.pbf`:
 ```bash
 cd ../../infrastructure
+```
+
+```bash
 docker run --rm -e PGPASSWORD=secretpassword -e DEBIAN_FRONTEND=noninteractive -v "${PWD}:/data" ubuntu bash -c "apt-get update && apt-get install -y osm2pgsql && osm2pgsql -d geo_plume_db -U admin -H host.docker.internal -P 5434 --create --slim --hstore --cache 1000 /data/kyiv.osm.pbf"
 ```
 Ця команда створить просторові таблиці (`planet_osm_polygon`, `planet_osm_line` тощо).
@@ -108,9 +118,12 @@ cd apps/simulation-worker
 2. Створіть та активуйте віртуальне середовище:
 ```bash
 python -m venv venv
-
+```
+```bash
 # Для Windows (використовуйте PowerShell):
 .\venv\Scripts\Activate.ps1
+```
+```bash
 # Для macOS/Linux:
 source venv/bin/activate
 ```
@@ -130,7 +143,8 @@ RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 ```bash
 # Для Windows:
 celery -A celery_worker.celery_app worker --loglevel=info --pool=solo
-
+```
+```bash
 # Для macOS/Linux:
 celery -A celery_worker.celery_app worker --loglevel=info
 ```
@@ -138,7 +152,9 @@ celery -A celery_worker.celery_app worker --loglevel=info
 6. **Запустіть FastAPI сервер** (відкрийте ще один новий термінал, перейдіть в `apps/simulation-worker`, активуйте `venv`):
 ```bash
 python main.py
-# або
+```
+або
+```bash
 uvicorn main:app --reload --port 8000
 ```
 Web-сервер Python працюватиме на http://localhost:8000
