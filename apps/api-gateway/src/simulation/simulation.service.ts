@@ -87,6 +87,17 @@ export class SimulationService {
     }
   }
 
+  async getCityIDW() {
+    const workerUrl = this.configService.get<string>('SIMULATION_WORKER_URL', 'http://localhost:8000');
+    const response = await fetch(`${workerUrl}/api/city-idw`);
+    if (!response.ok) {
+        const text = await response.text();
+        throw new HttpException(text, response.status);
+    }
+    const data = await response.json();
+    return data;
+  }
+
   async getPosts() {
     const posts = await this.prisma.$queryRaw`
     SELECT

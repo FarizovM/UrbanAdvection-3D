@@ -276,20 +276,31 @@ export default function MapComponent() {
     const handleCalculateCityIDW = async () => {
         setCalculationMode('city-idw');
         setIsCalculating(true);
-        // import dynamically or directly from utils
-        const { calculateCityIDW: computeIDW } = await import('./utils');
-        const result = computeIDW(posts);
-        setDispersion({
-            mode: 'city-idw' as any,
-            max_value: result.maxValue,
-            value_unit: 'мкг/м³',
-            voxels: result.voxels,
-            grid: { resolution_m: 500, nx: 0, ny: 0, nz: 0, vertical_resolution_m: 10 },
-            steps: 1, time_s: 0, terrain: { min_m: 0, max_m: 0, building_count: 0 },
-            wind: { from_deg: 0, to_deg: 0, speed_ms: 0 },
-            wind_streamlines: []
-        });
-        setIsCalculating(false);
+        setError(null);
+        try {
+            const response = await fetch(`${API_URL}/simulations/city-idw`);
+            const payload = await response.json();
+            if (!response.ok || payload.status !== 'success') {
+                throw new Error(payload.detail ?? payload.message ?? 'Помилка загальноміської карти');
+            }
+            
+            const result = payload.result;
+            
+            setDispersion({
+                mode: 'city-idw' as any,
+                max_value: result.maxValue,
+                value_unit: 'мкг/м³',
+                voxels: result.voxels,
+                grid: { resolution_m: result.resolution_m || 100, nx: 0, ny: 0, nz: 0, vertical_resolution_m: 10 },
+                steps: 1, time_s: 0, terrain: { min_m: 0, max_m: 0, building_count: 0 },
+                wind: { from_deg: 0, to_deg: 0, speed_ms: 0 },
+                wind_streamlines: []
+            });
+        } catch (reason: any) {
+            setError(reason.message);
+        } finally {
+            setIsCalculating(false);
+        }
     };
 
     const maxBuildingRisk = useMemo(() =>

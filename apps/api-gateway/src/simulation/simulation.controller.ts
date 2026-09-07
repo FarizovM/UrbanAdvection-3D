@@ -22,6 +22,11 @@ export class SimulationController {
     return this.simulationService.calculateReverseTrajectory(payload);
   }
 
+  @Get('city-idw')
+  async getCityIDW() {
+    return this.simulationService.getCityIDW();
+  }
+
   @Get('posts')
   async getPosts(): Promise<{ status: string; data: PostDto[] }> {
     const data: PostDto[] = await this.simulationService.getPosts();

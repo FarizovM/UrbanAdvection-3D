@@ -139,7 +139,7 @@ export function useMapLayers({
             id: 'city-idw-layer',
             data: dispersion.voxels,
             diskResolution: 6,
-            radius: 350,
+            radius: Math.max(20, (dispersion.grid.resolution_m || 100) * 0.6),
             extruded: true,
             pickable: true,
             elevationScale: 15,

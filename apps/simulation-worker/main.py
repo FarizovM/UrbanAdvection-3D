@@ -17,6 +17,7 @@ from database import SessionLocal, get_db
 from controllers.getNearestPost import get_nearest_posts
 from services.dispersion import calculate_dispersion
 from services.trajectory import calculate_reverse_trajectory
+from services.city_idw import calculate_city_idw
 
 POST_GENERATOR_INTERVAL_SECONDS = 300
 app = FastAPI(title="UrbanAdvection-3D Simulation Engine")
@@ -209,6 +210,16 @@ def api_reverse_trajectory(params: SimulationParams, db: Session = Depends(get_d
         return {"status": "success", "result": calculate_reverse_trajectory(payload, db)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.get("/api/city-idw")
+def api_city_idw(db: Session = Depends(get_db)):
+    """
+    Загальноміська 3D карта якості повітря (IDW).
+    """
+    try:
+        return {"status": "success", "result": calculate_city_idw(db)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/dispersion", status_code=202)
