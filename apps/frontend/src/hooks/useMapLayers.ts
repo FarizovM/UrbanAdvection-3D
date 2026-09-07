@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { PathLayer, PointCloudLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { PathLayer, PointCloudLayer, ScatterplotLayer, ColumnLayer } from '@deck.gl/layers';
 import { MVTLayer, TerrainLayer, TripsLayer } from '@deck.gl/geo-layers';
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions';
 
@@ -125,7 +125,7 @@ export function useMapLayers({
             pickable: false,
             extensions: TERRAIN_EXTENSION,
         }),
-        new PointCloudLayer({
+        dispersion?.mode !== 'city-idw' && new PointCloudLayer({
             id: 'dispersion-voxels-layer',
             data: dispersion?.voxels ?? [],
             getPosition: (voxel: Voxel) => voxel.position,
@@ -134,6 +134,19 @@ export function useMapLayers({
             getRadius: Math.max(8, (dispersion?.grid.resolution_m ?? 50) * 0.45),
             radiusUnits: 'meters',
             pickable: true,
+        }),
+        dispersion?.mode === 'city-idw' && new ColumnLayer({
+            id: 'city-idw-layer',
+            data: dispersion.voxels,
+            diskResolution: 6,
+            radius: 350,
+            extruded: true,
+            pickable: true,
+            elevationScale: 15,
+            getPosition: (d: Voxel) => d.position,
+            getFillColor: (d: Voxel) => plumeColor(d.normalized),
+            getElevation: (d: Voxel) => d.value,
+            extensions: TERRAIN_EXTENSION,
         }),
         new PathLayer<{ path: [number, number, number][] }>({
             id: 'wind-streamlines-layer',

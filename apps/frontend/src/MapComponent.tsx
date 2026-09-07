@@ -273,6 +273,25 @@ export default function MapComponent() {
         }
     };
 
+    const handleCalculateCityIDW = async () => {
+        setCalculationMode('city-idw');
+        setIsCalculating(true);
+        // import dynamically or directly from utils
+        const { calculateCityIDW: computeIDW } = await import('./utils');
+        const result = computeIDW(posts);
+        setDispersion({
+            mode: 'city-idw' as any,
+            max_value: result.maxValue,
+            value_unit: 'мкг/м³',
+            voxels: result.voxels,
+            grid: { resolution_m: 500, nx: 0, ny: 0, nz: 0, vertical_resolution_m: 10 },
+            steps: 1, time_s: 0, terrain: { min_m: 0, max_m: 0, building_count: 0 },
+            wind: { from_deg: 0, to_deg: 0, speed_ms: 0 },
+            wind_streamlines: []
+        });
+        setIsCalculating(false);
+    };
+
     const maxBuildingRisk = useMemo(() =>
         dispersion?.building_risks ? Math.max(...Object.values(dispersion.building_risks), 1e-9) : 1
         , [dispersion?.building_risks]);
@@ -301,7 +320,18 @@ export default function MapComponent() {
                 <Map mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" />
             </DeckGL>
 
-            <MapControls showTerrain={showTerrain} setShowTerrain={setShowTerrain} />
+            <MapControls 
+                showTerrain={showTerrain} 
+                setShowTerrain={setShowTerrain} 
+                calculationMode={calculationMode}
+                setCalculationMode={(mode) => {
+                    setCalculationMode(mode);
+                    if (mode !== 'city-idw') {
+                        if (dispersion?.mode === 'city-idw') setDispersion(null);
+                    }
+                }}
+                calculateCityIDW={handleCalculateCityIDW}
+            />
 
             <ErrorNotification error={error} setError={setError} />
 

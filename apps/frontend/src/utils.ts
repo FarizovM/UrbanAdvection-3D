@@ -1,4 +1,6 @@
-export function plumeColor(value: number): [number, number, number, number] {
+import type { ColorRGBA } from './types.ts';
+
+export function plumeColor(value: number): ColorRGBA {
     const normalized = Math.max(0, Math.min(1, value));
     return [
         Math.round(40 + 215 * normalized),
@@ -8,9 +10,9 @@ export function plumeColor(value: number): [number, number, number, number] {
     ];
 }
 
-export function heatColor(value: number): [number, number, number, number] {
+export function heatColor(value: number): ColorRGBA {
     const normalized = Math.max(0, Math.min(1, value));
-    const stops: Array<[number, number, number, number]> = [
+    const stops: Array<ColorRGBA> = [
         [45, 15, 100, 45],
         [94, 28, 154, 95],
         [193, 35, 104, 155],
@@ -51,7 +53,7 @@ export function formatNumber(value: number | null | undefined, requestedDigits =
     }).format(value);
 }
 
-export function buildingRiskColor(risk: number, maxRisk: number): [number, number, number, number] {
+export function buildingRiskColor(risk: number, maxRisk: number): ColorRGBA {
     const normalized = Math.max(0, Math.min(1, risk / maxRisk));
     // Amber to crimson: [255, 190, 0] -> [220, 20, 60]
     return [
@@ -62,8 +64,80 @@ export function buildingRiskColor(risk: number, maxRisk: number): [number, numbe
     ];
 }
 
-export function formatObservedAt(value: string | null | undefined): string {
+export function formatObservedAt(value: string | Date | null | undefined): string {
     return value == null ? 'немає даних' : new Date(value).toLocaleTimeString('uk-UA');
 }
 
 export const ELEVATION_DECODER = { rScaler: 256, gScaler: 1, bScaler: 1 / 256, offset: -32768 };
+
+export function calculateCityIDW(posts: any[], resolutionDeg = 0.005) {
+    if (!posts || posts.length === 0) return { voxels: [], maxValue: 0 };
+
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const p of posts) {
+        if (p.lng < minLng) minLng = p.lng;
+        if (p.lng > maxLng) maxLng = p.lng;
+        if (p.lat < minLat) minLat = p.lat;
+        if (p.lat > maxLat) maxLat = p.lat;
+    }
+
+    minLng -= 0.05; maxLng += 0.05;
+    minLat -= 0.05; maxLat += 0.05;
+
+    const alphaFactor = 2.0;
+    let maxValue = 0;
+    const gridValues = [];
+
+    for (let lng = minLng; lng <= maxLng; lng += resolutionDeg) {
+        for (let lat = minLat; lat <= maxLat; lat += resolutionDeg) {
+            let num = 0;
+            let den = 0;
+
+            for (const p of posts) {
+                // Determine value to interpolate (e.g. pm25, fallback to 1)
+                const aqValue = p.pm25_ug_m3 ?? p.no2_ug_m3 ?? p.pm10_ug_m3 ?? 10;
+
+                const windSpeed = p.wind_speed_ms ?? 0;
+                const windDir = p.wind_from_deg ?? 0;
+                const windToDeg = (windDir + 180) % 360;
+
+                const dy = lat - p.lat;
+                const cosLat = Math.cos(p.lat * Math.PI / 180);
+                const dx = (lng - p.lng) * cosLat;
+
+                let dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1e-6) dist = 1e-6;
+
+                const angleRad = Math.atan2(dx, dy); // dx=E, dy=N
+                const angleDeg = (angleRad * 180 / Math.PI + 360) % 360;
+
+                let theta = Math.abs(windToDeg - angleDeg);
+                if (theta > 180) theta = 360 - theta;
+
+                const alpha = windSpeed * alphaFactor;
+                const thetaRad = theta * Math.PI / 180;
+                const penalty = 1 + alpha * Math.pow(Math.sin(thetaRad / 2), 2);
+                const penalizedDist = dist * penalty;
+
+                const weight = 1 / Math.pow(penalizedDist, 2);
+
+                num += weight * aqValue;
+                den += weight;
+            }
+
+            if (den > 0) {
+                const val = num / den;
+                gridValues.push({ lng, lat, val });
+                if (val > maxValue) maxValue = val;
+            }
+        }
+    }
+
+    const voxels = gridValues.map(cell => ({
+        position: [cell.lng, cell.lat, 0] as [number, number, number],
+        value: cell.val,
+        normalized: maxValue > 0 ? cell.val / maxValue : 0
+    }));
+
+    return { voxels, maxValue };
+}

@@ -1,4 +1,6 @@
-export type CalculationMode = 'pollution' | 'heat' | 'trajectory';
+export type CalculationMode = 'pollution' | 'heat' | 'trajectory' | 'city-idw';
+
+export type ColorRGBA = [number, number, number, number];
 
 export type Post = {
     id: string;
