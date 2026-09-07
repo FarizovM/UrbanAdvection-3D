@@ -2,78 +2,91 @@ import {
     IsNumber,
     IsString,
     IsNotEmpty,
+    IsOptional,
     Min,
     Max
 } from "class-validator"
 
 export class DispersionPayloadDto {
+    @IsOptional()
     @IsString()
-    @IsNotEmpty()
-    station_id: string;
+    station_id?: string;
 
+    @IsOptional()
     @IsNumber()
-    @IsNotEmpty()
     @Min(-180)
     @Max(180)
-    lng: number;
+    lng?: number;
 
+    @IsOptional()
     @IsNumber()
-    @IsNotEmpty()
     @Min(-90)
     @Max(90)
-    lat: number;
+    lat?: number;
 
+    @IsOptional()
+    @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(360)
-    wind_from_deg: number;
+    wind_from_deg?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
-    wind_speed_ms: number;
+    wind_speed_ms?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(10000)
-    radius_m: number;
+    radius_m?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(1000)
-    resolution_m: number;
+    resolution_m?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(100)
-    vertical_resolution_m: number;
+    vertical_resolution_m?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(10000)
-    z_max_m: number;
+    z_max_m?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
     @Max(3600)
-    duration_s: number;
+    duration_s?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
-    wind_reference_height_m: number;
+    wind_reference_height_m?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
-    roughness_m: number;
+    roughness_m?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
-    horizontal_diffusivity_m2_s: number;
+    horizontal_diffusivity_m2_s?: number;
 
+    @IsOptional()
     @IsNumber()
     @Min(0)
-    vertical_diffusivity_m2_s: number;
+    vertical_diffusivity_m2_s?: number;
 
+    @IsOptional()
     @IsString()
-    @IsNotEmpty()
-    mode: "pollution" | "heat";
+    mode?: "pollution" | "heat" | "city-idw";
 }

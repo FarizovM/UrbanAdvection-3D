@@ -55,7 +55,7 @@ class SimulationParams(BaseModel):
     roughness_m: float = Field(default=1, ge=0.05, le=20)
     horizontal_diffusivity_m2_s: float = Field(default=10, ge=0, le=500)
     vertical_diffusivity_m2_s: float = Field(default=2, ge=0, le=100)
-    mode: Literal["pollution", "heat"] = "pollution"
+    mode: Literal["pollution", "heat", "city-idw"] = "pollution"
 
 
 class ObservationParams(BaseModel):
@@ -210,16 +210,6 @@ def api_reverse_trajectory(params: SimulationParams, db: Session = Depends(get_d
         return {"status": "success", "result": calculate_reverse_trajectory(payload, db)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-@app.get("/api/city-idw")
-def api_city_idw(db: Session = Depends(get_db)):
-    """
-    Загальноміська 3D карта якості повітря (IDW).
-    """
-    try:
-        return {"status": "success", "result": calculate_city_idw(db)}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/dispersion", status_code=202)

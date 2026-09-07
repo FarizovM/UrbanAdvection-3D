@@ -72,10 +72,10 @@ export function MapLegend({ dispersion, trajectories, calculationMode, maxBuildi
                     <div style={{ height: '12px', background: 'linear-gradient(to right, rgb(74, 80, 87), rgb(255, 190, 0), rgb(220, 20, 60))', borderRadius: '4px' }}></div>
                 </div>
             )}
-            
+
             {dispersion && calculationMode === 'city-idw' && (
                 <div>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', color: '#ff7777' }}>Загальноміська карта (IDW)</div>
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', color: '#ff7777' }}>Вітро-зважена інтерполяція всього міста (IDW)</div>
                     <div style={{ fontSize: '12px', color: '#ccc', marginBottom: '8px' }}>Вітро-зважена інтерполяція рівня забруднення (PM2.5) між усіма постами. Висота і колір стовпчиків відображають локальний рівень AQI. Анізотропне розсіювання "витягує" зони забруднення за вектором вітру.</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
                         <span>0</span>

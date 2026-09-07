@@ -275,32 +275,7 @@ export default function MapComponent() {
 
     const handleCalculateCityIDW = async () => {
         setCalculationMode('city-idw');
-        setIsCalculating(true);
-        setError(null);
-        try {
-            const response = await fetch(`${API_URL}/simulations/city-idw`);
-            const payload = await response.json();
-            if (!response.ok || payload.status !== 'success') {
-                throw new Error(payload.detail ?? payload.message ?? 'Помилка загальноміської карти');
-            }
-            
-            const result = payload.result;
-            
-            setDispersion({
-                mode: 'city-idw' as any,
-                max_value: result.maxValue,
-                value_unit: 'мкг/м³',
-                voxels: result.voxels,
-                grid: { resolution_m: result.resolution_m || 100, nx: 0, ny: 0, nz: 0, vertical_resolution_m: 10 },
-                steps: 1, time_s: 0, terrain: { min_m: 0, max_m: 0, building_count: 0 },
-                wind: { from_deg: 0, to_deg: 0, speed_ms: 0 },
-                wind_streamlines: []
-            });
-        } catch (reason: any) {
-            setError(reason.message);
-        } finally {
-            setIsCalculating(false);
-        }
+        await sendCalculation({ mode: 'city-idw' });
     };
 
     const maxBuildingRisk = useMemo(() =>
@@ -331,9 +306,9 @@ export default function MapComponent() {
                 <Map mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" />
             </DeckGL>
 
-            <MapControls 
-                showTerrain={showTerrain} 
-                setShowTerrain={setShowTerrain} 
+            <MapControls
+                showTerrain={showTerrain}
+                setShowTerrain={setShowTerrain}
                 calculationMode={calculationMode}
                 setCalculationMode={(mode) => {
                     setCalculationMode(mode);
@@ -342,6 +317,7 @@ export default function MapComponent() {
                     }
                 }}
                 calculateCityIDW={handleCalculateCityIDW}
+                isCalculating={isCalculating}
             />
 
             <ErrorNotification error={error} setError={setError} />

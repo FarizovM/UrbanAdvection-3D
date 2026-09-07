@@ -3,7 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 import math
 
-def calculate_city_idw(db: Session):
+def calculate_city_idw(payload: dict, db: Session):
     # Fetch posts with their latest observations
     query = text("""
         SELECT
@@ -119,7 +119,14 @@ def calculate_city_idw(db: Session):
         })
 
     return {
+        "mode": "city-idw",
+        "value_unit": "мкг/м³",
+        "max_value": max_val,
+        "steps": 1,
+        "time_s": 0,
+        "terrain": {"min_m": 0, "max_m": 0, "building_count": 0},
+        "grid": {"nx": 0, "ny": 0, "nz": 0, "resolution_m": 100, "vertical_resolution_m": 10},
+        "wind": {"from_deg": 0, "to_deg": 0, "speed_ms": 0},
         "voxels": voxels,
-        "maxValue": max_val,
-        "resolution_m": 100
+        "wind_streamlines": []
     }
